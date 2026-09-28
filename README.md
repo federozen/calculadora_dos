@@ -33,7 +33,7 @@ En Streamlit Cloud: *Main file path* = `calculadora_futbol_argentino.py`. No req
 - **Actualizar a hoy** siempre a mano en el panel lateral, con el estado de los datos.
 - Menú superior: **Equipo** (Panel, Puntos por objetivo, Escenarios) · **Competencia**
   (Previa de la fecha, Últimas fechas, Visualizaciones) · **Redacción** (Informe por equipo,
-  Consultas y chat) · **Datos** (Cargar y actualizar, Auditoría y reglas, Ajustes).
+  Cierre por zona, Consultas y chat) · **Datos** (Cargar y actualizar, Auditoría y reglas, Ajustes).
 
 ## Datos al día
 
@@ -50,6 +50,9 @@ intenta actualizar sola una vez por sesión.
 - Cada total que «depende de otros» indica la condición exacta (cuántos rivales pueden llegar
   y cuántos no deben llegar) y dos cierres reales del fixture: uno en que entra y otro en que queda afuera.
 - Las probabilidades siguen siendo simulaciones rotuladas como ESTIMADO.
+- **Redacción → Cierre por zona**: pieza lista para la nota con cada equipo en orden de tabla,
+  sus puntos, lectura de chances, lo que le queda por jugar y los puntos de cada rival entre
+  paréntesis. Opcional: mínimo exacto que asegura el pase. Incluye texto para copiar y .md.
 
 ## Versión web (Vercel)
 
