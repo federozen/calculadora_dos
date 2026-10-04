@@ -26,6 +26,8 @@ CRITICAL_COMPONENTS = (
     'lpf_competitive_context.py',
     'lpf_conditionals.py',
     'lpf_editorial_definition.py',
+    'lpf_editorial_round.py',
+    'lpf_copa_argentina.py',
     'lpf_relegation.py',
     'lpf_scenarios.py',
     'lpf_exact.py',
