@@ -14,6 +14,7 @@ LPF_RUNTIME_API = 21
 # Sólo módulos cuyo contrato cruza capas y cuya mezcla de versiones puede romper
 # el arranque o la UI. El nivel se incrementa únicamente cuando cambia ese contrato.
 CRITICAL_COMPONENTS = (
+    'lpf_checkpoint.py',
     'lpf_http.py',
     'competition_html_adapters.py',
     'lpf_models.py',
@@ -74,7 +75,15 @@ _COMPAT_CACHE: dict[str, dict[str, object]] = {}
 
 def runtime_compatibility(base_dir: str | Path | None = None) -> dict[str, object]:
     """Igual que antes, pero se calcula una sola vez por carpeta y proceso."""
-    key = str(base_dir or "")
+    root = Path(base_dir) if base_dir is not None else Path(__file__).resolve().parent
+    stamps = []
+    for filename in CRITICAL_COMPONENTS:
+        try:
+            stat = (root / filename).stat()
+            stamps.append((filename, stat.st_mtime_ns, stat.st_size))
+        except OSError:
+            stamps.append((filename, -1, -1))
+    key = str(root) + repr(stamps)
     if key not in _COMPAT_CACHE:
         _COMPAT_CACHE[key] = _runtime_compatibility_uncached(base_dir)
     return _COMPAT_CACHE[key]
@@ -92,6 +101,17 @@ def _runtime_compatibility_uncached(base_dir: str | Path | None = None) -> dict[
         checked.append(row)
         if found != LPF_RUNTIME_API:
             mismatches.append(row)
+        elif filename == "lpf_loading.py":
+            # El contrato numérico 21 también existía antes de agregar el corte.
+            # Comprobar la firma de los dos entrypoints evita aceptar esa mezcla.
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+            missing = [name for name in ("prepare_automatic_update", "prepare_offline_load")
+                       if name not in functions or "use_checkpoint" not in
+                       {arg.arg for arg in functions[name].args.kwonlyargs}]
+            if missing:
+                mismatches.append({"file": filename, "expected": "use_checkpoint",
+                                   "found": "firma anterior", "functions": missing})
     return {
         "ok": not mismatches,
         "runtime_api": LPF_RUNTIME_API,

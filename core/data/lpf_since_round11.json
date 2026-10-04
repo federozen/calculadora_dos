@@ -1,0 +1,51 @@
+{
+  "competition": "LPF Clausura 2026",
+  "updated_at": "2026-10-04T20:18:24.711329+00:00",
+  "source_urls": [
+    "https://www.ligaprofesional.ar/home-2026/"
+  ],
+  "played": [
+    [
+      "Atlético Tucumán",
+      "Barracas Central",
+      2,
+      3
+    ],
+    [
+      "Boca Juniors",
+      "Unión",
+      3,
+      0
+    ],
+    [
+      "Defensa y Justicia",
+      "San Lorenzo",
+      3,
+      0
+    ],
+    [
+      "Huracán",
+      "Aldosivi",
+      1,
+      0
+    ],
+    [
+      "Independiente",
+      "Instituto",
+      1,
+      4
+    ],
+    [
+      "Independiente Rivadavia",
+      "Gimnasia La Plata",
+      1,
+      1
+    ],
+    [
+      "Newell's Old Boys",
+      "Lanús",
+      0,
+      0
+    ]
+  ]
+}

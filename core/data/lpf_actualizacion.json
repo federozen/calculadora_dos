@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "updated_at": "2026-10-04T20:19:21.719706+00:00",
+  "fecha_min": 10,
+  "fecha_max": 11,
+  "resultados": 157,
+  "fuente": "Base fija F10 + LPF oficial desde F11",
+  "fuente_resultados": "Liga Profesional de Fútbol",
+  "sin_confirmar": 0,
+  "avisos": []
+}

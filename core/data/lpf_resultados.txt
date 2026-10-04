@@ -1,0 +1,157 @@
+Atlético Tucumán 0-0 Independiente Rivadavia
+Belgrano 2-1 Rosario Central
+Defensa y Justicia 1-1 Aldosivi
+Deportivo Riestra 3-0 Boca Juniors
+Estudiantes de La Plata 0-2 Independiente
+Estudiantes de Río Cuarto 1-0 Tigre
+Gimnasia de Mendoza 1-0 Central Córdoba
+Huracán 1-0 Banfield
+Lanús 1-0 San Lorenzo
+Newell's Old Boys 1-0 Talleres
+Platense 2-2 Unión
+Racing 2-1 Gimnasia La Plata
+River Plate 0-1 Barracas Central
+Sarmiento 2-3 Argentinos Juniors
+Vélez Sarsfield 1-0 Instituto
+Argentinos Juniors 3-0 Estudiantes de Río Cuarto
+Banfield 3-2 Sarmiento
+Barracas Central 1-0 Aldosivi
+Boca Juniors 1-0 Estudiantes de La Plata
+Central Córdoba 0-2 Atlético Tucumán
+Defensa y Justicia 2-1 Deportivo Riestra
+Gimnasia La Plata 1-0 River Plate
+Independiente 1-0 Newell's Old Boys
+Independiente Rivadavia 2-1 Huracán
+Instituto 2-1 Platense
+Rosario Central 0-0 Racing
+San Lorenzo 1-0 Gimnasia de Mendoza
+Talleres 1-3 Vélez Sarsfield
+Tigre 0-0 Belgrano
+Unión 2-1 Lanús
+Aldosivi 1-2 Gimnasia La Plata
+Belgrano 0-1 Argentinos Juniors
+Central Córdoba 1-0 San Lorenzo
+Deportivo Riestra 0-1 Barracas Central
+Estudiantes de La Plata 3-0 Defensa y Justicia
+Estudiantes de Río Cuarto 0-0 Banfield
+Gimnasia de Mendoza 2-0 Unión
+Huracán 0-0 Atlético Tucumán
+Lanús 0-1 Instituto
+Newell's Old Boys 2-2 Boca Juniors
+Platense 0-4 Talleres
+Racing 1-3 Tigre
+River Plate 0-1 Rosario Central
+Sarmiento 2-1 Independiente Rivadavia
+Vélez Sarsfield 1-0 Independiente
+Argentinos Juniors 2-1 Racing
+Atlético Tucumán 1-2 Sarmiento
+Banfield 0-2 Belgrano
+Boca Juniors 1-1 Vélez Sarsfield
+Defensa y Justicia 2-1 Newell's Old Boys
+Deportivo Riestra 2-0 Estudiantes de La Plata
+Gimnasia La Plata 2-0 Barracas Central
+Independiente 0-1 Platense
+Independiente Rivadavia 2-1 Estudiantes de Río Cuarto
+Instituto 1-0 Gimnasia de Mendoza
+Rosario Central 2-1 Aldosivi
+San Lorenzo 0-2 Huracán
+Talleres 0-3 Lanús
+Tigre 1-0 River Plate
+Unión 1-2 Central Córdoba
+Aldosivi 0-0 Tigre
+Barracas Central 0-1 Rosario Central
+Belgrano 2-0 Independiente Rivadavia
+Central Córdoba 0-1 Instituto
+Estudiantes de La Plata 4-0 Gimnasia La Plata
+Estudiantes de Río Cuarto 0-1 Atlético Tucumán
+Gimnasia de Mendoza 3-1 Talleres
+Lanús 1-3 Independiente
+Newell's Old Boys 2-0 Deportivo Riestra
+Platense 1-1 Boca Juniors
+Racing 0-1 Banfield
+River Plate 2-0 Argentinos Juniors
+San Lorenzo 1-0 Unión
+Sarmiento 2-0 Huracán
+Vélez Sarsfield 1-1 Defensa y Justicia
+Aldosivi 1-3 Unión
+Atlético Tucumán 0-0 Instituto
+Barracas Central 1-2 Platense
+Belgrano 1-2 Defensa y Justicia
+Estudiantes de Río Cuarto 0-0 San Lorenzo
+Gimnasia La Plata 2-3 Gimnasia de Mendoza
+Huracán 0-0 Deportivo Riestra
+Independiente 0-0 Independiente Rivadavia
+Lanús 1-1 Argentinos Juniors
+Newell's Old Boys 2-1 Banfield
+Racing 1-1 Boca Juniors
+River Plate 2-2 Vélez Sarsfield
+Sarmiento 2-0 Estudiantes de La Plata
+Talleres 2-2 Rosario Central
+Tigre 2-1 Central Córdoba
+Argentinos Juniors 2-1 Aldosivi
+Atlético Tucumán 0-0 Belgrano
+Banfield 2-3 River Plate
+Boca Juniors 1-0 Lanús
+Defensa y Justicia 1-0 Platense
+Deportivo Riestra 1-1 Vélez Sarsfield
+Estudiantes de La Plata 0-0 Newell's Old Boys
+Huracán 1-1 Estudiantes de Río Cuarto
+Independiente 0-3 Gimnasia de Mendoza
+Independiente Rivadavia 3-1 Racing
+Instituto 1-0 San Lorenzo
+Rosario Central 1-2 Gimnasia La Plata
+Talleres 0-0 Central Córdoba
+Tigre 0-0 Barracas Central
+Unión 4-1 Sarmiento
+Aldosivi 3-1 Banfield
+Barracas Central 0-0 Argentinos Juniors
+Belgrano 1-1 Huracán
+Central Córdoba 0-1 Independiente
+Estudiantes de Río Cuarto 0-2 Sarmiento
+Gimnasia La Plata 2-1 Tigre
+Gimnasia de Mendoza 2-2 Boca Juniors
+Lanús 1-0 Defensa y Justicia
+Platense 1-1 Deportivo Riestra
+Racing 1-2 Atlético Tucumán
+River Plate 3-1 Independiente Rivadavia
+Rosario Central 1-1 Newell's Old Boys
+San Lorenzo 1-0 Talleres
+Unión 3-2 Instituto
+Vélez Sarsfield 1-0 Estudiantes de La Plata
+Argentinos Juniors 1-1 Gimnasia La Plata
+Atlético Tucumán 1-2 River Plate
+Banfield 1-1 Barracas Central
+Boca Juniors 3-1 Central Córdoba
+Defensa y Justicia 2-0 Gimnasia de Mendoza
+Deportivo Riestra 0-3 Lanús
+Estudiantes de La Plata 2-1 Platense
+Huracán 2-1 Racing
+Independiente 1-1 San Lorenzo
+Independiente Rivadavia 4-3 Aldosivi
+Instituto 2-1 Estudiantes de Río Cuarto
+Newell's Old Boys 1-1 Vélez Sarsfield
+Sarmiento 1-1 Belgrano
+Talleres 2-1 Unión
+Tigre 0-1 Rosario Central
+Aldosivi 1-0 Atlético Tucumán
+Barracas Central 0-1 Independiente Rivadavia
+Belgrano 2-1 Estudiantes de Río Cuarto
+Central Córdoba 2-2 Defensa y Justicia
+Gimnasia La Plata 2-2 Banfield
+Gimnasia de Mendoza 0-0 Deportivo Riestra
+Instituto 3-1 Talleres
+Lanús 2-1 Estudiantes de La Plata
+Platense 0-1 Newell's Old Boys
+Racing 3-1 Sarmiento
+River Plate 1-2 Huracán
+Rosario Central 1-0 Argentinos Juniors
+San Lorenzo 0-2 Boca Juniors
+Unión 1-2 Independiente
+Vélez Sarsfield 3-2 Tigre
+Atlético Tucumán 2-3 Barracas Central
+Boca Juniors 3-0 Unión
+Defensa y Justicia 3-0 San Lorenzo
+Huracán 1-0 Aldosivi
+Independiente 1-4 Instituto
+Independiente Rivadavia 1-1 Gimnasia La Plata
+Newell's Old Boys 0-0 Lanús
