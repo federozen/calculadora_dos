@@ -176,6 +176,67 @@ def _simple_conditions(rows, matches, target_key):
     return sufficient_label, necessary_label
 
 
+def complete_condition_paths(rows, matches):
+    """Partición exhaustiva y sin solapamientos de los resultados enumerados.
+
+    Fusiona desenlaces con subárboles idénticos. Cada camino es una conjunción;
+    los caminos son alternativas. Omite una cancha sólo si ningún desenlace suyo
+    cambia el estado final ni la posición al cierre de la fecha.
+    """
+    if not rows:
+        return []
+    def build(subset, depth):
+        states = {(r['season_state'], r['round_state']) for r in subset}
+        if len(states) == 1:
+            return ('leaf', *next(iter(states)))
+        children = tuple(build([r for r in subset if r['other_outcomes'][depth] == code], depth + 1)
+                         for code in OUTCOMES)
+        if children[0] == children[1] == children[2]:
+            return children[0]
+        return ('node', depth, children)
+
+    paths = []
+    def walk(node, conditions):
+        if node[0] == 'leaf':
+            count = 3 ** (len(matches) - len(conditions))
+            for item in conditions:
+                count *= len(item['allowed'])
+            season, position = node[1:]
+            paths.append({'conditions': conditions, 'combinations': count,
+                          'season_state': season, 'round_state': position,
+                          'label': {'in': 'Asegura el objetivo', 'out': 'Queda eliminado',
+                                    'pelea': 'El objetivo sigue abierto'}[season],
+                          'round_label': {'safe': 'Dentro del corte sin desempate',
+                                          'tiebreak': 'En la línea: depende del desempate',
+                                          'out': 'Fuera del corte'}[position],
+                          'text': ' Y '.join(c['label'] for c in conditions) or 'Cualquier resultado de las otras canchas'})
+            return
+        _, index, children = node
+        groups = []
+        for code, child in zip(OUTCOMES, children):
+            group = next((g for g in groups if g[1] == child), None)
+            if group is None:
+                groups.append(([code], child))
+            else:
+                group[0].append(code)
+        home, away = matches[index]
+        for allowed, child in groups:
+            codes = set(allowed)
+            if codes == {'E', 'V'}:
+                label = f'{home} no gana'
+            elif codes == {'L', 'E'}:
+                label = f'{away} no gana'
+            elif codes == {'L', 'V'}:
+                label = f'{home} y {away} no empatan'
+            else:
+                label = _outcome_label(matches[index], allowed[0])
+            walk(child, conditions + [{'match_index': index, 'match': list(matches[index]),
+                                       'allowed': allowed, 'label': label}])
+    walk(build(rows, 0), [])
+    return sorted(paths, key=lambda p: ({'in': 0, 'pelea': 1, 'out': 2}[p['season_state']],
+                                      len(p['conditions']), -p['combinations'], p['text']))
+
+
 def next_round_conditionals(
     base: Mapping[str, object],
     rest: Mapping[str, int],
@@ -288,6 +349,7 @@ def next_round_conditionals(
             "elimination_necessary_condition": elimination_necessary,
             "levers": levers,
             "proof": proof,
+            "condition_paths": complete_condition_paths(rows, others),
         })
 
     return {
@@ -405,6 +467,38 @@ def branch_explanation(branch: Mapping[str, object], objective_label: str = "el 
 
     parts.append("Son condiciones matemáticas enumeradas; no son probabilidades.")
     return " ".join(parts)
+
+
+def editorial_blocks(report, team, objective_label):
+    """Bloques verificables para lectura ampliada y organización por un LLM."""
+    blocks = []
+    for branch in report.get('branches', []):
+        prefix = str(branch['result'])
+        blocks.append({'id': prefix + '_proof', 'text': branch_explanation(branch, objective_label)})
+        paths = branch.get('condition_paths') or []
+        for season, heading in [('in', 'Para asegurar el objetivo'), ('pelea', 'Para seguir con el objetivo abierto'),
+                                ('out', 'Para quedar eliminado')]:
+            options = [p for p in paths if p['season_state'] == season]
+            if not options:
+                continue
+            sample = '; O BIEN '.join(p['text'] for p in options[:3])
+            suffix = f' Hay {len(options) - 3} alternativas agrupadas adicionales en la tabla completa.' if len(options) > 3 else ''
+            blocks.append({'id': prefix + '_' + season,
+                           'text': f"{team} · {branch['result_label'].lower()}: {heading.lower()}, se cumple uno de estos caminos: {sample}.{suffix}"})
+    blocks.append({'id': 'scope', 'text': 'Las alternativas cubren la próxima fecha seleccionada, no todas las fechas restantes. '
+                   'Quedar dentro del corte en esta jornada no equivale a asegurar el objetivo final. '
+                   'Los empates en la línea requieren desempate. Los conteos describen combinaciones, no probabilidades.'})
+    return blocks
+
+
+def ordered_editorial_blocks(blocks, ids):
+    """El asistente puede ordenar los bloques; no modificar hechos o condiciones."""
+    known = {b['id']: b['text'] for b in blocks}
+    if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
+        raise ValueError('Orden editorial inválido')
+    if len(ids) != len(known) or set(ids) != set(known):
+        raise ValueError('El asistente omitió o agregó bloques')
+    return '\n\n'.join(known[i] for i in ids)
 
 
 def key_rival_matrix(

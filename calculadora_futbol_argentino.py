@@ -68,7 +68,7 @@ from lpf_pisos import (
     promedio_totales, tabla_pisos_objetivo,
 )
 from lpf_competitive_context import competition_context, historical_reference
-from lpf_conditionals import branch_explanation, key_rival_matrix, next_round_conditionals
+from lpf_conditionals import branch_explanation, editorial_blocks, ordered_editorial_blocks, key_rival_matrix, next_round_conditionals
 from lpf_editorial_definition import (
     all_teams_matrix, branch_cell, branch_state, definition_clock, fight_zone,
     definition_guarantee as _editorial_definition_guarantee,
@@ -9964,20 +9964,33 @@ def _render_point_ladder(team, base, rest, pending, cutoff, title):
     current_cutoff = int(table.iloc[min(cutoff, len(table)) - 1]["PTS"])
     ui_markdown(f"### {title}")
     with st.spinner("Resolviendo el fixture completo…"):
-        exact = point_ladder(base, pending, team, cutoff, max_rows=8, max_matches=110)
+        exact = point_ladder(base, pending, team, cutoff, max_rows=100, max_matches=110)
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Puntos actuales", current)
     c2.metric("Corte actual", current_cutoff)
     c3.metric("Techo", ceiling)
-    c4.metric("Mínimo que asegura", exact.get("guarantee") if exact.get("available") else "No calculado")
+    guarantee_label = exact.get('guarantee')
+    c4.metric("Mínimo que asegura", guarantee_label if guarantee_label is not None else "Sin comprobar")
     if not exact.get("available"):
         ui_warning(exact.get("reason") or "No se pudo ejecutar el motor exacto.")
         ui_info("No se publica un mínimo aproximado como si fuera exacto. El mínimo que asegura será el menor puntaje alcanzable que el motor compruebe suficiente pase lo que pase.")
         return
+    if exact.get('minimum_possible') is None:
+        ui_info('No existe un cierre compatible que permita entrar por este corte, aun con desempate favorable.')
+        return
     ui_markdown(
         f"**Mínimo todavía posible:** {exact.get('minimum_possible')} · "
-        f"**Mínimo que asegura:** {exact.get('guarantee')}"
+        f"**Mínimo que asegura:** {guarantee_label if guarantee_label is not None else 'Sin garantía comprobada'}"
     )
+    guarantee = exact.get('guarantee')
+    minimum = exact.get('minimum_possible')
+    if guarantee is not None:
+        ui_markdown(f"**Con {guarantee} puntos asegura {title.split(' · ')[-1]} sin ayuda y aun con desempate adverso.**")
+    if minimum is not None and minimum != guarantee:
+        ui_markdown(f"**Con menos también puede entrar:** desde {minimum} puntos hay cierres compatibles favorables. "
+                    "Eso exige ayuda de otros resultados y, en algunos cierres, del desempate. La tabla incluye todos los totales menores analizados.")
+    if exact.get('impossible_totals'):
+        ui_caption('Puntajes alcanzables que no permiten entrar: ' + ', '.join(map(str, exact['impossible_totals'])) + '.')
     rows = []
     for row in exact.get("rows", []):
         rows.append({
@@ -9986,12 +9999,17 @@ def _render_point_ladder(team, base, rest, pending, cutoff, title):
             "¿Puede entrar?": "Sí" if row.can_qualify else "No",
             "¿También puede quedar afuera?": "Sí" if row.can_fail else "No",
             "Rivales que pueden llegar": len(getattr(row, "rivals_can_reach", []) or []) if not row.guaranteed else "—",
-            "Así entra / así queda afuera": " · ".join(row.example[:2]) if row.example else "No necesita ayuda",
+            "Condición que cubre todos los cierres": (
+                'Asegura aun con desempate adverso' if row.guaranteed else
+                f'Entra sin desempate si como máximo {max(0, int(cutoff) - 1)} rivales llegan a {row.final_points} o más. '
+                f'Si menos de {int(cutoff)} lo superan pero los empatados exceden los lugares disponibles, decide el desempate.'),
+            "Ejemplos de cierres compatibles": " · ".join(row.example[:2]) if row.example else "No necesita ayuda",
         })
     ui_dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    ui_caption(f"En cada total «depende de otros», entra si como máximo {max(0, int(cutoff) - 1)} rivales terminan por encima. "
+    ui_caption(f"Para entrar por puntos, como máximo {max(0, int(cutoff) - 1)} rivales pueden terminar por encima. "
                "Los dos ejemplos (uno en que entra y otro en que queda afuera) son cierres reales del fixture pendiente, "
-               "no los únicos. En los empates en puntos decide el desempate.")
+               "no los únicos. Si los empatados superan los lugares disponibles, define el desempate. "
+               "Los caminos completos de otras canchas se muestran para la próxima fecha; estos ejemplos abarcan el cierre del torneo.")
 
 
 def _render_exact_next_round_conditionals(team, base, rest, pending):
@@ -10071,6 +10089,7 @@ def _render_exact_next_round_conditionals(team, base, rest, pending):
     st.bar_chart(round_chart)
     ui_caption("También es frecuencia combinatoria. Una igualdad en la línea no se presenta como clasificación asegurada.")
 
+    _render_complete_conditions(team, 'los playoffs', report, scope='next_round')
     ui_markdown("##### Narrativa exacta de la fecha")
     for branch in branches:
         total = max(1, int(branch["total_combinations"]))
@@ -10302,6 +10321,92 @@ def _definition_decisive_matches(report):
     return rows
 
 
+def _render_complete_conditions(team, objective_label, report, *, scope):
+    """Lectura corta y acceso a la partición completa de la jornada."""
+    if not report or not report.get('available'):
+        return
+    branches = report.get('branches') or []
+    ui_markdown('### Qué asegura y qué puede conseguir con menos')
+    for branch in branches:
+        total = int(branch.get('total_combinations', 0))
+        inside = int(branch.get('season_in', 0))
+        outside = int(branch.get('season_out', 0))
+        points = branch.get('final_points_after_round')
+        label = branch.get('result_label')
+        if inside == total:
+            conclusion = f'asegura {objective_label} sin ayuda de otras canchas.'
+        elif inside:
+            conclusion = f'puede asegurar {objective_label}, pero necesita resultados ajenos favorables.'
+        elif outside == total:
+            conclusion = f'queda sin chances de {objective_label}.'
+        else:
+            conclusion = f'todavía no asegura {objective_label}; el objetivo sigue abierto en algunos o todos los caminos.'
+        ui_markdown(f'**{label} · {points} puntos:** {conclusion}')
+
+    ui_caption('Cada camino une condiciones con Y; un camino u otro son alternativas. Las canchas omitidas pueden terminar de cualquier manera. ' 
+               'Se cubren todas las combinaciones de la próxima fecha seleccionada. Los estados de garantía usan puntos y techos restantes; '
+               'seguir abierto no demuestra por sí solo que exista un cierre favorable del torneo completo.')
+    choice = ui_selectbox('Resultado propio para ver todos los caminos',
+                          [b['result_label'] for b in branches], key=f'complete_branch_{scope}_{team}')
+    branch = next(b for b in branches if b['result_label'] == choice)
+    paths = branch.get('condition_paths') or []
+    if not paths:
+        ui_info('Esta foto no contiene el detalle completo de caminos. Actualizá los datos o volvé a calcular la fecha.')
+        return
+    all_rows = [{'Camino': i + 1, 'Condiciones que deben cumplirse juntas': p['text'],
+                 'Objetivo final': p['label'], 'Al terminar esta fecha': p['round_label'],
+                 'Combinaciones cubiertas': p['combinations']} for i, p in enumerate(paths)]
+    favorable = [p for p in paths if p['season_state'] == 'in']
+    if favorable:
+        ui_markdown(f'**{len(favorable)} caminos agrupados aseguran el objetivo con {branch["final_points_after_round"]} puntos:**')
+        for p in favorable[:3]:
+            ui_markdown(f'- {p["text"]}.')
+        if len(favorable) > 3:
+            ui_caption(f'Hay {len(favorable) - 3} alternativas más en el detalle completo.')
+    else:
+        ui_info('Ningún camino asegura el objetivo final con este resultado propio. El detalle muestra cómo termina la fecha y cuándo la pelea sigue abierta.')
+    with st.expander(f'Ver todos los caminos · {len(paths)} grupos / {branch["total_combinations"]} combinaciones', expanded=False):
+        ui_dataframe(pd.DataFrame(all_rows), use_container_width=True, hide_index=True,
+                     export_title=f'Caminos completos · {team} · {choice}',
+                     export_name=f'caminos_{scope}_{team}_{branch["result"]}')
+        ui_caption('Los grupos no se superponen: la suma de las combinaciones cubiertas coincide con el total enumerado. '
+                   'La tabla completa incluye garantía, eliminación, pelea abierta y desempates. No son probabilidades.')
+    with st.expander('Por qué alcanza o por qué no alcanza', expanded=False):
+        ui_markdown(branch_explanation(branch, objective_label))
+    with st.expander('Lectura ampliada · texto para la redacción', expanded=False):
+        blocks = editorial_blocks(report, team, objective_label)
+        natural_ids = [b['id'] for b in blocks]
+        payload = json.dumps(blocks, ensure_ascii=False)
+        model = str(st.session_state.get('LLM_MODEL', ''))
+        digest = hashlib.sha256((payload + model).encode()).hexdigest()
+        cache_key = f'editorial_order_{scope}_{team}'
+        enabled = bool(st.session_state.get('LLM_ON') and str(st.session_state.get('LLM_KEY', '')).strip())
+        if enabled and st.button('Organizar el relato con el asistente', key=f'editorial_button_{scope}_{team}'):
+            try:
+                response = requests.post('https://api.anthropic.com/v1/messages',
+                    headers={'x-api-key': st.session_state.LLM_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json'},
+                    json={'model': model, 'max_tokens': 1200,
+                          'system': 'Sos editor deportivo. Ordená TODOS los bloques para una lectura clara: conclusión, caminos, consecuencias, alcance. '
+                                    'No escribas texto ni cambies hechos. Respondé sólo JSON con una clave ids: lista con TODOS los identificadores, una vez cada uno.',
+                          'messages': [{'role': 'user', 'content': payload}]}, timeout=30)
+                response.raise_for_status()
+                raw = ''.join(b.get('text', '') for b in response.json().get('content', []) if b.get('type') == 'text')
+                ids = json.loads(raw)['ids']
+                ordered_editorial_blocks(blocks, ids)
+                st.session_state[cache_key] = {'digest': digest, 'ids': ids}
+            except Exception:
+                ui_warning('El asistente no devolvió un orden completo válido. Se muestra el relato calculado.')
+                st.session_state.pop(cache_key, None)
+        saved = st.session_state.get(cache_key) or {}
+        ids = saved.get('ids') if enabled and saved.get('digest') == digest else natural_ids
+        narrative = ordered_editorial_blocks(blocks, ids)
+        ui_markdown(narrative)
+        st.text_area('Texto para copiar', value=narrative, height=300, key=f'editorial_copy_{scope}_{team}_{hashlib.sha256(narrative.encode()).hexdigest()[:12]}')
+        ui_caption('El relato incluye las tres ramas y ejemplos de caminos. Todas las alternativas están en la tabla completa. '
+                   'El asistente opcional organiza bloques verificados: no cambia cifras ni agrega condiciones.')
+    return branch
+
+
 def _definition_tree_dot(team, objective_label, report):
     """Árbol corto: sólo abre condiciones que cambian el estado matemático."""
     if not report or not report.get("available"):
@@ -10309,7 +10414,7 @@ def _definition_tree_dot(team, objective_label, report):
     points = int(report.get("branches", [{}])[0].get("proof", {}).get("team_points", 0) or 0)
     lines = [
         'digraph {',
-        'graph [rankdir=LR, bgcolor="transparent", pad="0.2", nodesep="0.28", ranksep="0.45"];',
+        'graph [rankdir=TB, bgcolor="transparent", pad="0.2", nodesep="0.28", ranksep="0.45"];',
         'node [shape=box, style="rounded,filled", fontname="Arial", color="#cbd5e1"];',
         f'start [label="{team}\\n{objective_label}", fillcolor="#e2e8f0"];',
     ]
@@ -10328,12 +10433,18 @@ def _definition_tree_dot(team, objective_label, report):
             text, fill = f"{label}\\n{pts} pts\\nSIGUE ABIERTO", "#fef3c7"
         lines.append(f'{bid} [label="{text}", fillcolor="{fill}"];')
         lines.append(f'start -> {bid} [label=" {branch.get("result", "")}"];')
-        condition = str(branch.get("sufficient_condition") or "").strip()
-        if inside != state_total and outside != state_total and condition and condition != "No depende de otros resultados":
-            safe = condition.replace('"', "'")
-            cid = f"c{idx}"
-            lines.append(f'{cid} [label="{safe}\\n→ condición suficiente", fillcolor="#dcfce7"];')
-            lines.append(f'{bid} -> {cid};')
+        paths = branch.get('condition_paths') or []
+        for j, path in enumerate(paths[:3]):
+            safe = path['text'].replace('"', "'").replace(' Y ', '\\nY ')
+            state = path['label']
+            position = path['round_label']
+            cid = f'c{idx}_{j}'
+            color = {'in': '#dcfce7', 'out': '#fee2e2', 'pelea': '#fef3c7'}[path['season_state']]
+            lines.append(f'{cid} [label="{safe}\\n{state}\\nFecha: {position}", fillcolor="{color}"];')
+            lines.append(f'{bid} -> {cid} [label="O"];')
+        if len(paths) > 3:
+            lines.append(f'more{idx} [label="{len(paths) - 3} caminos más\\nVer detalle completo", fillcolor="#e2e8f0"];')
+            lines.append(f'{bid} -> more{idx};')
     lines.append('}')
     return "\n".join(lines)
 
@@ -11173,11 +11284,13 @@ def render_definition_radar(E):
         ui_caption("No hay otra cancha independiente para cruzar en esta fecha.")
 
     # Árbol reducido: sólo ramas con información nueva.
-    ui_markdown("### Árbol reducido del camino")
-    tree = _definition_tree_dot(team_focus, ctx["label"], report)
+    selected_branch = _render_complete_conditions(team_focus, ctx['label'], report, scope='definition')
+    ui_markdown("### Árbol del resultado propio seleccionado")
+    tree_report = {**report, 'branches': [selected_branch]} if selected_branch else report
+    tree = _definition_tree_dot(team_focus, ctx["label"], tree_report)
     if tree:
         _ST_GRAPHVIZ(tree, use_container_width=True)
-        ui_caption("El árbol corta las ramas terminales y no dibuja todas las combinaciones del torneo. Sólo muestra qué cambia el estado.")
+        ui_caption("El árbol muestra hasta tres caminos por resultado propio. Todas las alternativas están en el detalle completo de la próxima fecha.")
 
     # Partidos que más definen: ranking exacto de sensibilidad, no pronóstico.
     ui_markdown("### Partidos que más definen")

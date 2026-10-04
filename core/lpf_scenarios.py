@@ -33,6 +33,7 @@ class SolverResult:
     objective: float | None = None
     outcomes: dict[tuple[str, str], str] | None = None
     message: str = ""
+    proven_infeasible: bool = False
 
 
 def _points(value: object) -> int:
@@ -101,6 +102,8 @@ def _build_model(
     cached = _MODEL_CACHE.get(key)
     if cached is None:
         cached = _build_model_uncached(base, matches, team, target_final, cutoff, mode, fixed, optimize_rank)
+        if not cached.feasible and not cached.proven_infeasible:
+            return cached
         if len(_MODEL_CACHE) >= _MODEL_CACHE_MAX:
             _MODEL_CACHE.clear()
         _MODEL_CACHE[key] = cached
@@ -130,9 +133,11 @@ def _build_model_uncached(
     if nvars == 0:
         rank_bad = sum(_points(base[x]) >= target_final for x in rivals)
         if mode == "fail":
-            return SolverResult(rank_bad >= cutoff)
+            feasible = rank_bad >= cutoff
+            return SolverResult(feasible, proven_infeasible=not feasible)
         rank_strict = sum(_points(base[x]) > target_final for x in rivals)
-        return SolverResult(rank_strict <= cutoff - 1)
+        feasible = rank_strict <= cutoff - 1
+        return SolverResult(feasible, proven_infeasible=not feasible)
 
     # Coeficientes de puntos ganados por cada equipo.
     gains = {t: np.zeros(nvars) for t in teams}
@@ -203,7 +208,7 @@ def _build_model_uncached(
         options={"time_limit": 12.0, "mip_rel_gap": 0.0},
     )
     if not result.success or result.x is None:
-        return SolverResult(False, message=str(result.message))
+        return SolverResult(False, message=str(result.message), proven_infeasible=int(result.status) == 2)
     outcomes: dict[tuple[str, str], str] = {}
     for j, match in enumerate(matches):
         outcomes[match] = OUTCOMES[int(np.argmax(result.x[3*j:3*j+3]))]
@@ -581,18 +586,26 @@ def point_ladder(
             "rows": [],
         }
     statuses: list[PointLadderRow] = []
+    impossible_totals = []
     minimum = None
     guarantee = None
     for pts in reachable:
         q = can_qualify_with_points(base, matches, team, cutoff, pts)
         if not q.feasible:
+            if not q.proven_infeasible:
+                return {'available': False, 'reason': 'El solver no terminó de comprobar todos los puntajes. No se publica una garantía sin prueba.',
+                        'minimum_possible': None, 'guarantee': None, 'rows': []}
+            impossible_totals.append(pts)
             continue
         minimum = pts if minimum is None else minimum
         fail = can_fail_with_points(base, matches, team, cutoff, pts)
+        if not fail.feasible and not fail.proven_infeasible:
+            return {'available': False, 'reason': 'No se pudo descartar un cierre adverso. La garantía queda sin confirmar.',
+                    'minimum_possible': minimum, 'guarantee': None, 'rows': []}
         guaranteed = not fail.feasible
         if guaranteed and guarantee is None:
             guarantee = pts
-        status = "Mínimo que asegura" if guaranteed else "Depende de otros resultados"
+        status = ("Mínimo que asegura" if pts == guarantee else "Asegura sin ayuda") if guaranteed else "Puede entrar con ayuda"
         reading = {} if guaranteed else _ladder_reading(
             base, matches, team, cutoff, pts, q.outcomes, fail.outcomes
         )
@@ -623,6 +636,7 @@ def point_ladder(
         if guarantee is not None and pts >= guarantee + 3:
             break
     # Mantener los puntos cercanos a la frontera, no toda la temporada.
+    all_lower_totals = len(statuses) <= max_rows
     if len(statuses) > max_rows:
         pivot = next((i for i, row in enumerate(statuses) if row.guaranteed), len(statuses) - 1)
         start = max(0, pivot - max_rows + 2)
@@ -633,6 +647,8 @@ def point_ladder(
         "guarantee": guarantee,
         "rows": statuses,
         "solver": "scipy.optimize.milp",
+        "impossible_totals": impossible_totals,
+        "all_lower_totals": all_lower_totals,
     }
 
 
