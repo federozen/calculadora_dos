@@ -222,11 +222,11 @@ def _joint_relegation_feasible(
         return {"available": True, "feasible": False, "reason": "puntaje final inalcanzable"}
 
     m = len(matches)
-    z_candidates = rivals if route == "annual_after_average" else []
+    z_candidates = rivals if route in ("annual_after_average", "survival") else []
     z_start = 3 * m
-    nvars = 3 * m + len(z_candidates)
-    if nvars == 0:
-        return {"available": True, "feasible": False, "reason": "sin variables pendientes"}
+    y_start = z_start + len(z_candidates)
+    nvars = y_start + (len(rivals) if route == "survival" else 0)
+    nvars = max(1, nvars)
 
     gains = {name: np.zeros(nvars) for name in teams}
     home_pts = (3, 1, 0)
@@ -256,12 +256,12 @@ def _joint_relegation_feasible(
             lower = final_games[rival] * avg_points[team] - final_games[team] * avg_points[rival]
             rows.append((row, float(lower), np.inf))
 
-    elif route == "annual_after_average":
+    elif route in ("annual_after_average", "survival"):
         # Elegimos exactamente un rival como posible descendido por promedio.
         if not z_candidates:
             return {"available": True, "feasible": False, "reason": "sin rival para excluir por promedio"}
         pick = np.zeros(nvars)
-        pick[z_start:] = 1
+        pick[z_start:y_start] = 1
         rows.append((pick, 1.0, 1.0))
 
         # Big-M sólo activa las restricciones del candidato elegido. Es muy
@@ -285,13 +285,26 @@ def _joint_relegation_feasible(
 
             # Excluido candidate por promedio, team puede quedar último o empatado
             # último de la anual: todos los restantes tienen >= target_final_points.
-            for other in teams:
+            for other in (teams if route == "annual_after_average" else []):
                 if other in (team, candidate):
                     continue
                 row = gains[other].copy()
                 row[zvar] -= big_points
                 lower = int(target_final_points) - current_points[other]
                 rows.append((row, float(lower - big_points), np.inf))
+        if route == "survival":
+            # Elige un club distinto del descendido por promedio que termina con
+            # puntos <= team en la anual. Las igualdades permiten salvarse mediante
+            # desempate favorable; no se confunden con salvación asegurada.
+            pick = np.zeros(nvars); pick[y_start:] = 1
+            rows.append((pick, 1.0, 1.0))
+            for idx, other in enumerate(rivals):
+                different = np.zeros(nvars)
+                different[z_start + idx] = 1; different[y_start + idx] = 1
+                rows.append((different, -np.inf, 1.0))
+                row = gains[team] - gains[other]
+                row[y_start + idx] -= big_points
+                rows.append((row, float(current_points[other]-current_points[team]-big_points), np.inf))
     else:
         return {"available": False, "feasible": False, "reason": f"ruta desconocida: {route}"}
 
@@ -311,17 +324,31 @@ def _joint_relegation_feasible(
         options={"time_limit": 10.0, "mip_rel_gap": 0.0},
     )
     feasible = bool(result.success and result.x is not None)
-    picked = None
-    if feasible and z_candidates:
-        zvals = result.x[z_start:]
-        if len(zvals):
-            picked = z_candidates[int(np.argmax(zvals))]
-    return {
-        "available": True,
-        "feasible": feasible,
-        "reason": str(getattr(result, "message", "") or ""),
-        "average_relegated_candidate": picked,
-    }
+    if not feasible:
+        # Un timeout no prueba inexistencia de cierres adversos.
+        proven = int(getattr(result, 'status', -1)) == 2
+        return {'available':proven, 'feasible':False, 'proven_infeasible':proven,
+                'reason':str(getattr(result, 'message', '') or ''), 'average_relegated_candidate':None}
+    codes = ['L', 'E', 'V']
+    outcomes = [(h, a, codes[int(np.argmax(result.x[3*i:3*i+3]))]) for i,(h,a) in enumerate(matches)]
+    final = dict(current_points); avg_final = dict(avg_points)
+    for h,a,code in outcomes:
+        hp,ap = {'L':(3,0),'E':(1,1),'V':(0,3)}[code]
+        for name,gain in ((h,hp),(a,ap)):
+            if name in final: final[name]+=gain; avg_final[name]+=gain
+    picked = z_candidates[int(np.argmax(result.x[z_start:y_start]))] if z_candidates else None
+    ratios={t:Fraction(avg_final[t],final_games[t]) for t in teams}
+    valid=final[team]==int(target_final_points)
+    if route=='average':valid=valid and all(ratios[t]>=ratios[team] for t in rivals)
+    elif route=='annual_after_average':
+        valid=valid and all(ratios[t]>=ratios[picked] for t in teams) and all(final[t]>=final[team] for t in teams if t not in (team,picked))
+    else:
+        valid=valid and all(ratios[t]>=ratios[picked] for t in teams) and any(final[t]<=final[team] for t in teams if t not in (team,picked))
+    if not valid:
+        return {'available':False,'feasible':False,'reason':'El cierre no superó la verificación independiente.'}
+    return {'available':True, 'feasible':True, 'reason':'', 'average_relegated_candidate':picked,
+            'outcomes':outcomes, 'final_points':final,
+            'final_averages':{t:(avg_final[t],final_games[t]) for t in teams}}
 
 
 def joint_relegation_exact_ladder(
@@ -368,6 +395,7 @@ def joint_relegation_exact_ladder(
     reachable = [current + add for add in _reachable_additions(games_left)]
     rows = []
     guarantee = None
+    minimum_possible = None
     for final_points in reachable:
         avg_risk = _joint_relegation_feasible(
             annual, remaining, normalized, average_totals, team, final_points, route="average"
@@ -384,6 +412,12 @@ def joint_relegation_exact_ladder(
             if not annual_risk.get("available"):
                 return {"available": False, "reason": annual_risk.get("reason", "solver no disponible"), "rows": rows}
 
+        survival = _joint_relegation_feasible(annual, remaining, normalized, average_totals, team,
+                                             final_points, route='survival')
+        if not survival.get('available'):
+            return {'available':False, 'reason':survival.get('reason'), 'rows':rows}
+        if survival.get('feasible') and minimum_possible is None:
+            minimum_possible = final_points
         unsafe_route = None
         detail = ""
         if avg_risk.get("feasible"):
@@ -410,12 +444,14 @@ def joint_relegation_exact_ladder(
             "safe": unsafe_route is None,
             "unsafe_route": unsafe_route,
             "detail": detail,
+            "can_survive":bool(survival.get("feasible")),
         })
 
     return {
         "available": True,
         "method": "milp-joint-relegation",
         "guarantee": guarantee,
+        "minimum_possible":minimum_possible,
         "maximum": max(reachable) if reachable else current,
         "current": current,
         "rows": rows,
@@ -428,3 +464,39 @@ def joint_relegation_exact_ladder(
 from lpf_memo import memoize as _memoize
 _joint_relegation_feasible = _memoize(_joint_relegation_feasible)
 joint_relegation_exact_ladder = _memoize(joint_relegation_exact_ladder)
+
+
+
+def relegation_proof(annual, remaining, matches, averages, team, target):
+    """Cierres reproducibles al mismo total, nunca marcadores inventados."""
+    out={'available':True, 'target':int(target), 'examples':[]}
+    for route,label in [('survival','Puede salvarse'),('average','Riesgo por promedios'),('annual_after_average','Riesgo por Tabla General')]:
+        answer=_joint_relegation_feasible(annual,remaining,matches,averages,team,target,route=route)
+        if not answer.get('available'):
+            out['available']=False
+            out['reason']=answer.get('reason') or 'La comprobación no terminó.'
+            continue
+        out[route]=bool(answer.get('feasible'))
+        if answer.get('feasible'):
+            out['examples'].append({'label':label,'route':route,**answer})
+    return out
+
+
+
+def explain_relegation_example(example, team):
+    points=example['final_points'];averages=example['final_averages']
+    ratios={t:Fraction(*v) for t,v in averages.items()}
+    candidate=example.get('average_relegated_candidate')
+    if example['route']=='average':
+        tied=[t for t in points if t!=team and ratios[t]==ratios[team]]
+        return ('Empata el último promedio con '+', '.join(tied)+': exige desempate; no es un descenso confirmado.' if tied else 'Termina con el último promedio sin igualdad: en este cierre desciende por esa vía.')
+    pool={t:p for t,p in points.items() if t!=candidate}
+    low=min(pool.values());tied=[t for t,p in pool.items() if p==low]
+    if example['route']=='annual_after_average':
+        return ('Excluido '+candidate+', empata la plaza anual con '+', '.join(t for t in tied if t!=team)+': exige desempate.' if len(tied)>1 else 'Excluido '+candidate+', queda último en la anual sin igualdad: en este cierre desciende por la Tabla General.')
+    needs=[]
+    if ratios[team]==min(ratios.values()):needs.append('ganar el desempate por promedios')
+    if team in tied:needs.append('ganar el desempate de la anual')
+    if needs:return 'Este cierre permite salvarse, pero requiere '+ ' y '.join(needs)+'. No es salvación asegurada.'
+    below=[t for t,p in pool.items() if p<points[team]]
+    return 'En este cierre evita el peor promedio y, excluido '+candidate+', queda por encima de '+', '.join(below)+ ' en la anual. Se salva sin desempate.'

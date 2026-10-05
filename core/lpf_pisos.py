@@ -318,6 +318,7 @@ def piso_no_descenso(
         # Esta es la cuenta publicable en últimas fechas: Tabla Anual + promedios
         # resueltos a la vez, incluida la exclusión del descendido por promedio.
         resultado.exacto = True
+        resultado.minimo_posible = joint.get("minimum_possible")
         guarantee = joint.get("guarantee")
         resultado.piso_exacto = int(guarantee) if guarantee is not None else None
         resultado.piso_conservador = None
@@ -331,6 +332,9 @@ def piso_no_descenso(
         ]
         if guarantee is not None and int(guarantee) <= resultado.puntos_hoy:
             resultado.estado = "in"
+        elif resultado.minimo_posible is None:
+            resultado.estado = "out"
+            resultado.detalle = "No existe un cierre conjunto de permanencia, ni con desempate favorable."
         elif guarantee is None:
             resultado.estado = "pelea"
             resultado.detalle = (
@@ -351,18 +355,14 @@ def piso_no_descenso(
         resultado.piso_exacto = parte_anual.piso_exacto
         resultado.piso_conservador = parte_anual.piso_conservador
         resultado.exacto = parte_anual.exacto
-    elif (
-        parte_anual.exacto
-        and parte_anual.piso_exacto is not None
-        and piso_prom is not None
-        and piso_prom <= parte_anual.piso_exacto
-    ):
-        resultado.piso_exacto = parte_anual.piso_exacto
-        resultado.exacto = True
     else:
-        resultado.piso_exacto = parte_anual.piso_exacto
-        resultado.piso_conservador = max(safe_values) if safe_values else None
+        # Si no terminó la prueba conjunta, dos referencias seguras sólo dan
+        # una referencia conservadora cuando AMBAS están comprobadas.
+        resultado.piso_exacto = None
+        resultado.piso_conservador = max(annual_safe, piso_prom) if annual_safe is not None and piso_prom is not None else None
         resultado.exacto = False
+        resultado.minimo_posible = None
+        resultado.estado = 'in' if resultado.piso_conservador is not None and resultado.piso_conservador <= resultado.puntos_hoy else 'pelea'
 
     resultado.detalle = detalle_prom
     if resultado.estado == "in":
