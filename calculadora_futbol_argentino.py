@@ -14,6 +14,110 @@ _CORE_DIR = Path(__file__).resolve().parent / "core"
 if str(_CORE_DIR) not in sys.path:
     sys.path.insert(0, str(_CORE_DIR))
 
+def _refresh_core_imports(core_dir):
+    """Evita mezclar módulos retenidos con los archivos del nuevo deploy."""
+    import hashlib as _hashlib_boot
+    import importlib as _importlib_boot
+    digest = _hashlib_boot.sha256()
+    sources = sorted(core_dir.glob('*.py'))
+    for path in sources:
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    registry = getattr(sys, '_lpf_deployed_sources', {})
+    key = str(core_dir.resolve())
+    revision = digest.hexdigest()
+    if registry.get(key) == revision:
+        return
+    stems = {path.stem for path in sources}
+    for name in list(sys.modules):
+        if name.split('.')[0] in stems:
+            sys.modules.pop(name, None)
+    # Descartar bytecode de otro despliegue, incluso si conserva tamaño/mtime.
+    for path in (core_dir / '__pycache__').glob('*.pyc'):
+        try:
+            path.unlink()
+        except OSError:
+            pass
+    _importlib_boot.invalidate_caches()
+    registry[key] = revision
+    sys._lpf_deployed_sources = registry
+
+
+def _missing_editorial_functions(core_dir):
+    """Comprueba el archivo instalado antes de importar sus funciones nuevas."""
+    import ast as _ast_boot
+    requirements = {
+        'lpf_editorial_round.py': ('build_round_article', 'round_start_snapshot', 'build_editorial_piece',
+            'piece_html', 'build_fixture_piece', 'build_need_piece', 'objective_proof'),
+        'lpf_relegation.py': ('current_relegation_picture', 'relegation_proof', 'explain_relegation_example'),
+    }
+    missing = []
+    for filename, functions in requirements.items():
+        try:
+            tree = _ast_boot.parse((core_dir / filename).read_text(encoding='utf-8'))
+            names = {node.name for node in tree.body if isinstance(node, (_ast_boot.FunctionDef, _ast_boot.AsyncFunctionDef))}
+            absent = [name for name in functions if name not in names]
+        except (OSError, SyntaxError, UnicodeError):
+            absent = list(functions)
+        if absent:
+            missing.append((filename, absent))
+    return missing
+
+
+_refresh_core_imports(_CORE_DIR)
+
+def _refresh_core_imports(core_dir):
+    """Evita mezclar módulos retenidos con los archivos del nuevo deploy."""
+    import hashlib as _hashlib_boot
+    import importlib as _importlib_boot
+    digest = _hashlib_boot.sha256()
+    sources = sorted(core_dir.glob('*.py'))
+    for path in sources:
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    registry = getattr(sys, '_lpf_deployed_sources', {})
+    key = str(core_dir.resolve())
+    revision = digest.hexdigest()
+    if registry.get(key) == revision:
+        return
+    stems = {path.stem for path in sources}
+    for name in list(sys.modules):
+        if name.split('.')[0] in stems:
+            sys.modules.pop(name, None)
+    # Descartar bytecode de otro despliegue, incluso si conserva tamaño/mtime.
+    for path in (core_dir / '__pycache__').glob('*.pyc'):
+        try:
+            path.unlink()
+        except OSError:
+            pass
+    _importlib_boot.invalidate_caches()
+    registry[key] = revision
+    sys._lpf_deployed_sources = registry
+
+
+def _missing_editorial_functions(core_dir):
+    """Comprueba el archivo instalado antes de importar sus funciones nuevas."""
+    import ast as _ast_boot
+    requirements = {
+        'lpf_editorial_round.py': ('build_round_article', 'round_start_snapshot', 'build_editorial_piece',
+            'piece_html', 'build_fixture_piece', 'build_need_piece', 'objective_proof'),
+        'lpf_relegation.py': ('current_relegation_picture', 'relegation_proof', 'explain_relegation_example', 'relegation_tree', 'relegation_tree_dot'),
+    }
+    missing = []
+    for filename, functions in requirements.items():
+        try:
+            tree = _ast_boot.parse((core_dir / filename).read_text(encoding='utf-8'))
+            names = {node.name for node in tree.body if isinstance(node, (_ast_boot.FunctionDef, _ast_boot.AsyncFunctionDef))}
+            absent = [name for name in functions if name not in names]
+        except (OSError, SyntaxError, UnicodeError):
+            absent = list(functions)
+        if absent:
+            missing.append((filename, absent))
+    return missing
+
+
+_refresh_core_imports(_CORE_DIR)
+
 # En Vercel la app corre en el navegador (stlite/Pyodide): las consultas HTTP
 # salen por la función /api/proxy del mismo deploy. En local no cambia nada.
 import web_http as _web_http
@@ -24,6 +128,13 @@ from lpf_loading import results_text
 from lpf_version import __version__
 
 import streamlit as st
+_MISSING_EDITORIAL = _missing_editorial_functions(_CORE_DIR)
+if _MISSING_EDITORIAL:
+    st.error('Faltan archivos de la actualización de piezas para redacción.')
+    for _filename, _functions in _MISSING_EDITORIAL:
+        st.write(f'Actualizar core/{_filename}. Faltan: ' + ', '.join(_functions))
+    st.info(f'Reemplazá todos los archivos del paquete {__version__}, manteniendo la carpeta core, y reiniciá la app con Reboot.')
+    st.stop()
 from lpf_runtime import LPF_RUNTIME_API, runtime_compatibility, runtime_error_message
 from lpf_services import (
     ContractError as _LPFServiceContractError,
@@ -77,7 +188,7 @@ from lpf_editorial_definition import (
     guarantee_round_label as _editorial_guarantee_round_label,
     objective_context as _editorial_objective_context,
 )
-from lpf_relegation import current_relegation_picture, relegation_proof, explain_relegation_example
+from lpf_relegation import current_relegation_picture, relegation_proof, explain_relegation_example, relegation_tree, relegation_tree_dot
 from lpf_snapshot import snapshot_average_totals
 from lpf_preview import preview_objective as _preview_objective, team_preview_text as _team_preview_text_core
 from lpf_display import (
@@ -10840,11 +10951,7 @@ def render_definition_radar(E):
     _radar_team = _global_team(E.get("equipos") or [])
     objective = _lpf_objective_label()
     if objective == "Descenso":
-        ui_info(
-            "Para descenso no mezclo este semáforo con una simplificación incompleta: la definición combina Tabla Anual, "
-            "Promedios y la regla de reasignación. Usá el Panel por equipo/Descenso; este paquete visual queda por ahora "
-            "reservado a Playoffs y copas."
-        )
+        _render_need_editorial(E, objective='Descenso')
         return
 
     lab = None
@@ -13086,6 +13193,88 @@ def _render_need_why(E, team, objective, floor, fingerprint):
             ui_caption('Este es un ejemplo completo compatible con el fixture, no la única alternativa ni un pronóstico.')
 
 
+def _render_relegation_tree(E, team, fingerprint):
+    ui_markdown('### Árbol de permanencia · próximos partidos')
+    ui_caption('Foto de los resultados cargados. Cruza Tabla General, promedios y reasignación. Se fijan sólo sus resultados: las otras canchas todavía pueden terminar de cualquier manera.')
+    snapshot = _lpf_service_snapshot(E)
+    annual = snapshot.get('annual') or {}
+    rest = snapshot.get('remaining') or {}
+    pending = [(g['home'],g['away']) for g in snapshot.get('pending') or []]
+    averages = snapshot_average_totals(snapshot) or {}
+    if int(E.get('n_anual',1)) != 1 or int(E.get('n_prom',1)) != 1:
+        ui_info('El árbol conjunto requiere una plaza por Tabla General y una por promedios.')
+        return
+    agenda = _schedule_ordered_team_matches(team,pending,LPF_FIXTURE,_lpf_schedule_map() or {})
+    upcoming = [r['match'] for r in agenda]
+    if not upcoming:
+        ui_info('No hay partidos propios pendientes.')
+        return
+    for i,row in enumerate(agenda[:3],1):
+        h,a = row['match']
+        when = _schedule_format_datetime(row['scheduled_at'].isoformat()) if row.get('scheduled_at') else 'Horario no cargado'
+        ui_markdown(f'**Partido {i} · fecha {row["round"]}:** {editorialize_text(h)} – {editorialize_text(a)} · {when}')
+    ui_caption('Orden según los horarios cargados; si no hay horario, según la fecha oficial. Cada nivel es un partido propio, no necesariamente una semana calendario.')
+    key = 'relegation_tree_cache_'+team
+    agenda_key = repr(upcoming[:3])
+    saved = st.session_state.get(key) or {}
+    if saved.get('fingerprint') != fingerprint or saved.get('agenda') != agenda_key:
+        with st.spinner('Comprobando todas las ramas de sus próximos dos partidos…'):
+            report = relegation_tree(annual,rest,pending,averages,team,upcoming,depth=2)
+        st.session_state[key] = {'fingerprint':fingerprint,'agenda':agenda_key,'report':report}
+    else:
+        report = saved['report']
+    if not report.get('available'):
+        ui_warning(report.get('reason') or 'No se pudo calcular el árbol.')
+        return
+    labels = {'in':'Asegura permanencia','out':'Descenso inevitable en esta rama',
+              'open':'Puede salvarse con ayuda','unknown':'Comprobación incompleta'}
+    st.graphviz_chart(relegation_tree_dot(report), use_container_width=True)
+    ui_caption('Rojo: no existe ningún cierre que lo salve, ni ganando los desempates. Amarillo: existe salida, pero también riesgo. Verde: ninguna combinación adversa lo hace descender. Gris: el cálculo no terminó; no prueba eliminación.')
+    leaves = [n for n in report['nodes'] if len(n['path'])==report['depth']]
+    rows = [{'Camino': ' → '.join({'G':'Gana','E':'Empata','P':'Pierde'}[c] for c in n['path']),
+             'Puntos tras estos partidos':n['points'],'Techo final':n['ceiling'],'Situación':labels[n['state']]} for n in leaves]
+    ui_dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True,
+                 export_title='Todos los caminos propios de permanencia', export_name='arbol_permanencia')
+    reds = [r['Camino'] for r,n in zip(rows,leaves) if n['state']=='out']
+    if reds:
+        ui_warning('Puede quedar sin chances con estas secuencias propias: ' + '; '.join(reds) + '. Bajo esas condiciones, ni los resultados ajenos más favorables lo rescatan.')
+    else:
+        ui_info('Ninguna secuencia de estos partidos propios demuestra todavía descenso inevitable. Eso no garantiza salvarse: resultados ajenos pueden empeorar la situación.')
+    choices = [r['Camino'] for r in rows]
+    path_key = 'relegation_tree_path_'+team
+    if st.session_state.get(path_key) not in choices:
+        st.session_state[path_key] = choices[0]
+    choice = st.selectbox('Camino para explicar o seguir una fecha más', choices, key=path_key)
+    selected = leaves[[r['Camino'] for r in rows].index(choice)]
+    ui_markdown('**Por qué:** '+selected['reason'])
+    with st.expander('Resultados ajenos de ejemplo en este camino', expanded=False):
+        for i,example in enumerate(selected.get('examples') or []):
+            ui_markdown('**'+example['label']+'**')
+            ui_markdown(editorialize_text(explain_relegation_example(example,team)))
+            games = [{'Local':editorialize_text(h),'Visitante':editorialize_text(a),
+                      'Resultado supuesto':{'L':'Gana local','E':'Empate','V':'Gana visitante'}[code]} for h,a,code in example['outcomes']]
+            ui_dataframe(pd.DataFrame(games),hide_index=True,use_container_width=True,
+                export_title='Cierre del camino seleccionado',export_name='camino_permanencia_'+str(i))
+            ui_caption('Ejemplo compatible con todos los partidos pendientes, no una predicción ni la única alternativa.')
+    if len(upcoming)>2:
+        fixed={}
+        for game,result in zip(upcoming,selected['path']):
+            fixed[game] = 'E' if result=='E' else ('L' if (result=='G')==(game[0]==team) else 'V')
+        deeper_key = 'relegation_tree_deeper_'+team
+        if st.button('Explorar el tercer partido desde este camino',key='relegation_tree_more_'+team):
+            with st.spinner('Comprobando la fecha siguiente…'):
+                deeper = relegation_tree(annual,rest,pending,averages,team,upcoming[2:3],depth=1,initial_fixed=fixed)
+            st.session_state[deeper_key] = {'fingerprint':fingerprint,'agenda':agenda_key,'path':choice,'report':deeper}
+        cached = st.session_state.get(deeper_key) or {}
+        if cached.get('fingerprint')==fingerprint and cached.get('agenda')==agenda_key and cached.get('path')==choice:
+            ui_markdown('#### Tercer partido, suponiendo '+choice.lower())
+            st.graphviz_chart(relegation_tree_dot(cached['report']),use_container_width=True)
+    text = '\n'.join([f'# {team}: árbol de permanencia',
+        *[f"{r['Camino']}: {r['Puntos tras estos partidos']} puntos, techo {r['Techo final']}. {r['Situación']}." for r in rows],
+        'Sólo se fijan resultados propios. Se comprueba el torneo completo, con ambas vías y desempates. Foto de los datos cargados.'])
+    st.download_button('Descargar lectura del árbol',text.encode(),file_name='arbol_permanencia.md',mime='text/markdown')
+
+
 def _render_need_editorial(E, *, objective=None):
     """Conclusión breve y detalle progresivo para todos los objetivos."""
     teams = sorted(E.get('equipos') or [])
@@ -13127,6 +13316,8 @@ def _render_need_editorial(E, *, objective=None):
     floor = piece['floor']
     snap_for_key = _lpf_service_snapshot(E)
     fingerprint = hashlib.sha256(json.dumps({**{k:snap_for_key.get(k) for k in ('zones','annual','opening','remaining','pending','previous_averages','qualification','rules')}, 'copa_arg_vivos':E.get('copa_arg_vivos') or []}, ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
+    if objective == 'Descenso':
+        _render_relegation_tree(E, team, fingerprint)
     if not floor.get('resolved'):
         with st.expander('Por qué · rivales, dos tablas y cierres comprobados', expanded=False):
             _render_need_why(E, team, objective, floor, fingerprint)
@@ -13189,14 +13380,14 @@ def _render_need_editorial(E, *, objective=None):
 
 def render_editorial_hub(E):
     _page_header('🧩', 'Piezas para redacción', 'Elegí un formato, revisá sus cuentas y copiá o descargá la pieza')
-    formats = ['Qué necesita · todos los objetivos', 'Copas · tarjeta del equipo',
+    formats = ['Descenso · árbol de próximas fechas', 'Qué necesita · todos los objetivos', 'Copas · tarjeta del equipo',
                'Descenso · tarjeta del equipo', 'Cruces de octavos', 'Dificultad del fixture', 'Qué puede definirse esta fecha',
                'La pelea del 7º, 8º y 9º', 'Tarjeta del equipo', 'Duelos de la fecha', 'Radiografía de la zona',
                'Semáforo de playoffs', 'Antes y después de la fecha',
                'Previa completa', 'Copa Argentina', 'Más consultas del catálogo']
     kind = st.selectbox('Formato de la pieza', formats, key='newsroom_piece_format')
-    if kind in ('Qué necesita · todos los objetivos', 'Copas · tarjeta del equipo', 'Descenso · tarjeta del equipo'):
-        _render_need_editorial(E, objective={'Copas · tarjeta del equipo':'Copas', 'Descenso · tarjeta del equipo':'Descenso'}.get(kind))
+    if kind in ('Descenso · árbol de próximas fechas', 'Qué necesita · todos los objetivos', 'Copas · tarjeta del equipo', 'Descenso · tarjeta del equipo'):
+        _render_need_editorial(E, objective={'Copas · tarjeta del equipo':'Copas', 'Descenso · tarjeta del equipo':'Descenso', 'Descenso · árbol de próximas fechas':'Descenso'}.get(kind))
         return
     if kind == 'Más consultas del catálogo':
         render_visible_pieces(E, embedded=True)
@@ -13379,7 +13570,7 @@ with st.container(border=True):
     _shortcut_cols[0].page_link(_EDITORIAL_PAGE, label="Piezas para redacción", icon="🧩", use_container_width=True)
     _shortcut_cols[1].page_link(_PREVIEW_PAGE, label="Previa de la fecha", icon="📅", use_container_width=True)
     _shortcut_cols[2].page_link(_REPORT_PAGE, label="Informe por equipo", icon="🗞️", use_container_width=True)
-    ui_caption(f"Versión {__version__} · Qué necesita, copas, descenso, octavos y dificultad del fixture")
+    ui_caption(f"Versión {__version__} · Árbol de descenso, qué necesita, copas, octavos y dificultad del fixture")
 _sidebar_context()
 if os.environ.get("LPF_DEBUG_TIMING"):
     import time as _time_dbg

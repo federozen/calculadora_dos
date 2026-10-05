@@ -174,9 +174,10 @@ def _joint_relegation_feasible(
     matches,
     average_totals,
     team: str,
-    target_final_points: int,
+    target_final_points: int | None,
     *,
     route: str,
+    fixed=None,
 ):
     """Busca un cierre compatible donde ``team`` quede expuesto al descenso.
 
@@ -217,8 +218,8 @@ def _joint_relegation_feasible(
     if any(final_games[name] <= 0 for name in teams):
         return {"available": False, "feasible": False, "reason": "denominadores de promedio inválidos"}
 
-    need_team = int(target_final_points) - current_points[team]
-    if need_team not in _reachable_additions(int(remaining.get(team, 0))):
+    need_team = int(target_final_points) - current_points[team] if target_final_points is not None else None
+    if need_team is not None and need_team not in _reachable_additions(int(remaining.get(team, 0))):
         return {"available": True, "feasible": False, "reason": "puntaje final inalcanzable"}
 
     m = len(matches)
@@ -246,7 +247,14 @@ def _joint_relegation_feasible(
         rows.append((row, 1.0, 1.0))
 
     # El equipo analizado termina exactamente con target_final_points.
-    rows.append((gains[team].copy(), float(need_team), float(need_team)))
+    if need_team is not None:
+        rows.append((gains[team].copy(), float(need_team), float(need_team)))
+    for match, code in (fixed or {}).items():
+        if tuple(match) not in matches or code not in ('L','E','V'):
+            return {'available':False,'feasible':False,'reason':'Resultado fijado fuera del fixture pendiente.'}
+        idx=matches.index(tuple(match))
+        row=np.zeros(nvars);row[3*idx+('L','E','V').index(code)]=1
+        rows.append((row,1.0,1.0))
 
     if route == "average":
         # Para quedar último/empatado último, TODOS los rivales pueden terminar
@@ -288,9 +296,9 @@ def _joint_relegation_feasible(
             for other in (teams if route == "annual_after_average" else []):
                 if other in (team, candidate):
                     continue
-                row = gains[other].copy()
+                row = gains[other] - gains[team]
                 row[zvar] -= big_points
-                lower = int(target_final_points) - current_points[other]
+                lower = current_points[team] - current_points[other]
                 rows.append((row, float(lower - big_points), np.inf))
         if route == "survival":
             # Elige un club distinto del descendido por promedio que termina con
@@ -338,7 +346,9 @@ def _joint_relegation_feasible(
             if name in final: final[name]+=gain; avg_final[name]+=gain
     picked = z_candidates[int(np.argmax(result.x[z_start:y_start]))] if z_candidates else None
     ratios={t:Fraction(avg_final[t],final_games[t]) for t in teams}
-    valid=final[team]==int(target_final_points)
+    valid=target_final_points is None or final[team]==int(target_final_points)
+    decoded={(h,a):code for h,a,code in outcomes}
+    valid=valid and all(decoded.get(tuple(match))==code for match,code in (fixed or {}).items())
     if route=='average':valid=valid and all(ratios[t]>=ratios[team] for t in rivals)
     elif route=='annual_after_average':
         valid=valid and all(ratios[t]>=ratios[picked] for t in teams) and all(final[t]>=final[team] for t in teams if t not in (team,picked))
@@ -500,3 +510,74 @@ def explain_relegation_example(example, team):
     if needs:return 'Este cierre permite salvarse, pero requiere '+ ' y '.join(needs)+'. No es salvación asegurada.'
     below=[t for t,p in pool.items() if p<points[team]]
     return 'En este cierre evita el peor promedio y, excluido '+candidate+', queda por encima de '+', '.join(below)+ ' en la anual. Se salva sin desempate.'
+
+
+
+def relegation_state_with_results(annual,remaining,matches,averages,team,fixed):
+    """Estado al final del torneo bajo resultados propios fijados, con ambas vías."""
+    survival=_joint_relegation_feasible(annual,remaining,matches,averages,team,None,route='survival',fixed=fixed)
+    if not survival.get('available'):
+        return {'state':'unknown','reason':survival.get('reason'),'examples':[]}
+    if not survival['feasible']:
+        return {'state':'out','reason':'No existe ningún cierre compatible de permanencia, ni con desempate favorable.','examples':[]}
+    examples=[{'route':'survival','label':'Un cierre que permite salvarse',**survival}]
+    checked=[]
+    for route,label in [('average','Un cierre de riesgo por promedios'),('annual_after_average','Un cierre de riesgo por la anual')]:
+        risk=_joint_relegation_feasible(annual,remaining,matches,averages,team,None,route=route,fixed=fixed)
+        checked.append(risk)
+        if risk.get('feasible'):
+            examples.append({'route':route,'label':label,**risk})
+            return {'state':'open','reason':'Existe un cierre de permanencia y también un cierre de riesgo; necesita ayuda o puede requerir desempate.','examples':examples}
+    if not all(x.get('available') for x in checked):
+        return {'state':'unknown','reason':'Se comprobó un cierre favorable, pero no terminó la prueba de garantía.','examples':examples}
+    return {'state':'in','reason':'Ningún cierre compatible lo expone al descenso por ninguna de las dos vías.','examples':examples}
+
+
+def relegation_tree(annual,remaining,matches,averages,team,upcoming,*,depth=2,initial_fixed=None):
+    """Partición completa de G/E/P propios, mientras las otras canchas quedan libres.
+
+    El árbol no anticipa resultados ajenos: out es descenso inevitable bajo esa
+    rama aun ganando cualquier desempate. open conserva tanto salida como riesgo.
+    """
+    depth=max(1,min(2,int(depth)))
+    games=[tuple(p) for p in upcoming[:depth]]
+    if not games:return {'available':False,'reason':'No hay partidos propios pendientes.','nodes':[]}
+    if any(team not in p for p in games):raise ValueError('Partido ajeno en el árbol')
+    fixed_start=dict(initial_fixed or {})
+    prior_own=[(h,a,c) for (h,a),c in fixed_start.items() if team in (h,a)]
+    added_start=sum(({'L':3,'E':1,'V':0}[c] if h==team else {'L':0,'E':1,'V':3}[c]) for h,a,c in prior_own)
+    current=int(annual[team]['pts'])+added_start;nodes=[]
+    labels={'G':'Gana','E':'Empata','P':'Pierde'}
+    frontier=[([],fixed_start,'root',0)]
+    for level,game in enumerate(games,1):
+        next_frontier=[]
+        for path,fixed,parent,added in frontier:
+            for result in ('G','E','P'):
+                code='E' if result=='E' else ('L' if (result=='G')==(game[0]==team) else 'V')
+                chosen={**fixed,game:code}
+                state=relegation_state_with_results(annual,remaining,matches,averages,team,chosen)
+                points=added+{'G':3,'E':1,'P':0}[result]
+                route=path+[result];node_id='n_'+''.join(route)
+                node={'id':node_id,'parent':parent,'path':route,'result':labels[result], 'match':game,
+                      'points':current+points,'remaining':int(remaining[team])-len(prior_own)-level,
+                      'ceiling':current+points+3*(int(remaining[team])-len(prior_own)-level),**state}
+                nodes.append(node)
+                next_frontier.append((route,chosen,node_id,points))
+        frontier=next_frontier
+    return {'available':True,'team':team,'current':current,'games':games,'nodes':nodes,'depth':len(games)}
+
+
+def relegation_tree_dot(report):
+    """Dos niveles de resultados propios: etiquetas breves, sin probabilidades."""
+    import json
+    quote=lambda value:json.dumps(str(value),ensure_ascii=False)
+    lines=['digraph {','graph [rankdir=LR, bgcolor="transparent"];','node [shape=box, style="rounded,filled", fontname="Arial", fontsize=11];',
+           'root [label='+quote(str(report['team'])+'\n'+str(report['current'])+' puntos hoy')+',fillcolor="#e2e8f0"];']
+    labels={'in':'ASEGURA PERMANENCIA','out':'DESCENSO INEVITABLE','open':'PUEDE SALVARSE · CON AYUDA','unknown':'SIN COMPROBACIÓN COMPLETA'}
+    colors={'in':'#dcfce7','out':'#fee2e2','open':'#fef3c7','unknown':'#e2e8f0'}
+    for n in report['nodes']:
+        text=n['result']+'\n'+str(n['points'])+' pts · techo '+str(n['ceiling'])+'\n'+labels[n['state']]
+        lines.append(n['id']+' [label='+quote(text)+',fillcolor='+quote(colors[n['state']])+'];')
+        lines.append(n['parent']+' -> '+n['id']+';')
+    lines.append('}')
+    return '\n'.join(lines)
