@@ -223,7 +223,7 @@ def _joint_relegation_feasible(
         return {"available": True, "feasible": False, "reason": "puntaje final inalcanzable"}
 
     m = len(matches)
-    z_candidates = rivals if route in ("annual_after_average", "survival") else []
+    z_candidates = rivals if route in ("annual_after_average", "survival", "average_survival") else []
     z_start = 3 * m
     y_start = z_start + len(z_candidates)
     nvars = y_start + (len(rivals) if route == "survival" else 0)
@@ -264,7 +264,7 @@ def _joint_relegation_feasible(
             lower = final_games[rival] * avg_points[team] - final_games[team] * avg_points[rival]
             rows.append((row, float(lower), np.inf))
 
-    elif route in ("annual_after_average", "survival"):
+    elif route in ("annual_after_average", "survival", "average_survival"):
         # Elegimos exactamente un rival como posible descendido por promedio.
         if not z_candidates:
             return {"available": True, "feasible": False, "reason": "sin rival para excluir por promedio"}
@@ -352,6 +352,8 @@ def _joint_relegation_feasible(
     if route=='average':valid=valid and all(ratios[t]>=ratios[team] for t in rivals)
     elif route=='annual_after_average':
         valid=valid and all(ratios[t]>=ratios[picked] for t in teams) and all(final[t]>=final[team] for t in teams if t not in (team,picked))
+    elif route=='average_survival':
+        valid=valid and all(ratios[t]>=ratios[picked] for t in teams)
     else:
         valid=valid and all(ratios[t]>=ratios[picked] for t in teams) and any(final[t]<=final[team] for t in teams if t not in (team,picked))
     if not valid:
@@ -581,3 +583,103 @@ def relegation_tree_dot(report):
         lines.append(n['parent']+' -> '+n['id']+';')
     lines.append('}')
     return '\n'.join(lines)
+
+
+
+def relegation_separate_routes(annual,remaining,matches,averages,team):
+    """Dos cuentas aisladas, para explicar; jamás sustituyen la prueba conjunta."""
+    from lpf_scenarios import can_qualify_with_points,can_fail_with_points
+    current=int(annual[team]['pts']);left=int(remaining[team]);adds=_reachable_additions(left)
+    answer={'current':current,'remaining':left,'ceiling':current+3*left}
+    for route in ('annual','average'):
+        rows=[];minimum=None;guarantee=None;complete=True
+        for added in adds:
+            total=current+added
+            if route=='annual':
+                good=can_qualify_with_points(annual,matches,team,len(annual)-1,total)
+                bad=can_fail_with_points(annual,matches,team,len(annual)-1,total)
+                good_known=good.feasible or good.proven_infeasible
+                bad_known=bad.feasible or bad.proven_infeasible
+                possible=bool(good.feasible);safe=bad_known and not bad.feasible
+            else:
+                good=_joint_relegation_feasible(annual,remaining,matches,averages,team,total,route='average_survival')
+                bad=_joint_relegation_feasible(annual,remaining,matches,averages,team,total,route='average')
+                good_known=good.get('available',False);bad_known=bad.get('available',False)
+                possible=bool(good.get('feasible'));safe=bad_known and not bad.get('feasible')
+            if not good_known or not bad_known:complete=False
+            if possible and minimum is None:minimum=total
+            if safe and guarantee is None:guarantee=total
+            rows.append({'total':total,'possible':possible if good_known else None,'safe':safe if bad_known else None})
+        answer[route]={'minimum':minimum,'guarantee':guarantee if complete else None,'complete':complete,'rows':rows}
+    ap,aj=averages[team];den=aj+left
+    own_low=Fraction(ap,den);own_high=Fraction(ap+3*left,den)
+    annual_rivals=[];average_rivals=[]
+    for rival,row in annual.items():
+        if rival==team:continue
+        rleft=int(remaining[rival]);rp=int(row['pts'])
+        if rp<=answer['ceiling'] and rp+3*rleft>=current:
+            annual_rivals.append(rival)
+        bp,bj=averages[rival];rd=bj+rleft
+        if rd and Fraction(bp,rd)<=own_high and Fraction(bp+3*rleft,rd)>=own_low:
+            average_rivals.append(rival)
+    answer['annual']['rivals']=sorted(annual_rivals,key=lambda t:int(annual[t]['pts']))
+    answer['average']['rivals']=sorted(average_rivals,key=lambda t:Fraction(*averages[t]))
+    thresholds=[]
+    for rival in answer['average']['rivals']:
+        bp,bj=averages[rival];rd=bj+int(remaining[rival])
+        rival_adds=_reachable_additions(int(remaining[rival]))
+        selected=rival_adds
+        for x in selected:
+            strictly=next((a for a in adds if Fraction(ap+a,den)>Fraction(bp+x,rd)),None)
+            tie=next((a for a in adds if Fraction(ap+a,den)==Fraction(bp+x,rd)),None)
+            thresholds.append({'rival':rival,'rival_adds':x,'rival_final_average':f'{bp+x}/{rd}',
+                'own_adds_to_pass':strictly,'own_adds_to_tie':tie,'own_total_to_pass':current+strictly if strictly is not None else None})
+    answer['annual']['thresholds']=[]
+    for rival in answer['annual']['rivals']:
+        rp=int(annual[rival]['pts'])
+        for x in _reachable_additions(int(remaining[rival])):
+            strictly=next((a for a in adds if current+a>rp+x),None)
+            tie=next((a for a in adds if current+a==rp+x),None)
+            answer['annual']['thresholds'].append({'rival':rival,'rival_adds':x,'own_adds_to_pass':strictly,'own_adds_to_tie':tie})
+    answer['average']['thresholds']=thresholds
+    answer['average']['points']=ap;answer['average']['played']=aj;answer['average']['final_played']=den
+    return answer
+
+
+def relegation_three_text(team,separate,joint):
+    """Orden requerido: anual, promedios y ambas; sólo rivales de la pelea."""
+    current=separate['current'];ceiling=separate['ceiling']
+    lines=[f'## {team} · qué necesita para salvarse',f'Tiene {current} puntos en la anual; le quedan {separate["remaining"]} partidos y puede llegar a {ceiling}.']
+    for route,title in [('annual','1. Tabla General (anual)'),('average','2. Promedios')]:
+        data=separate[route];lines.append('### '+title)
+        lines.append('Debe evitar la última plaza de esta tabla. Esta cuenta se explica por separado; todavía no certifica la permanencia conjunta.')
+        rivals=data['rivals']
+        lines.append('**Rivales cuyos rangos pueden cruzarse con el suyo:** '+(', '.join(rivals) if rivals else 'ninguno')+'.')
+        if data['minimum'] is not None and data['complete']:
+            lines.append(f'**Menor total con una salida comprobada en esta vía: {data["minimum"]} puntos anuales (sumar {max(0,data["minimum"]-current)}).** Necesita un cierre favorable y puede requerir ganar un desempate.')
+        elif data['complete']:
+            lines.append('No existe un cierre que lo salve por esta vía, ni con desempate favorable.')
+        else:lines.append('La comprobación del mínimo posible no terminó; no se publica un mínimo.')
+        if data['guarantee'] is not None:
+            lines.append(f'**Mínimo que asegura esta vía: {data["guarantee"]} puntos anuales (sumar {max(0,data["guarantee"]-current)}).** No requiere ayuda ni desempate en esta tabla.')
+        elif data['complete']:lines.append('**No hay un total propio alcanzable que asegure esta vía sin ayuda.**')
+        else:lines.append('La garantía de esta vía todavía no está comprobada.')
+        if route=='average':
+            lines.append(f'Su promedio final será ({data["points"]} + puntos que sume)/{data["final_played"]}. Los denominadores pueden ser distintos entre clubes; se comparan cocientes, no puntos acumulados.')
+            for r in data['thresholds']:
+                extra=('necesita sumar '+str(r['own_adds_to_pass'])+' para superarlo' if r['own_adds_to_pass'] is not None else 'no puede superarlo ni ganando todo')
+                tie=('; sumar '+str(r['own_adds_to_tie'])+' lo iguala y exigiría desempate' if r['own_adds_to_tie'] is not None else '')
+                lines.append(f'- Si {r["rival"]} suma {r["rival_adds"]}, {team} {extra}{tie}.')
+            lines.append('Estas comparaciones son requisitos aritméticos bajo el puntaje supuesto del rival; no prueban que ambas sumas sean compatibles con el fixture. Esa comprobación está en la cuenta conjunta.')
+    lines.append('### 3. Las dos vías juntas · permanencia')
+    if joint.get('minimum_possible') is not None:
+        value=joint['minimum_possible'];lines.append(f'**Menor total conjunto posible: {value} puntos (sumar {max(0,value-current)}), con resultados ajenos favorables y eventualmente desempates.**')
+    elif joint.get('estado')=='out':lines.append('No existe un cierre conjunto de permanencia, ni con desempates favorables.')
+    else:lines.append('El menor total conjunto posible aún no está comprobado.')
+    value=joint.get('minimum_guarantee')
+    if value is not None:lines.append(f'**Con {value} puntos (sumar {max(0,value-current)}) asegura la permanencia por las dos vías.**')
+    elif joint.get('estado')=='out':lines.append('**El descenso ya es inevitable con los datos cargados.**')
+    elif joint.get('exacto'):lines.append('**Ningún total propio alcanzable asegura la permanencia: necesita ayuda aunque gane todo.**')
+    else:lines.append('El mínimo conjunto que asegura todavía no está comprobado.')
+    lines.append('Primero se resuelve el descenso por promedio. Ese club se excluye de la anual y la otra plaza se define entre los restantes. Superar en la anual únicamente al club que desciende por promedio no lo salva: necesita evitar ser el peor entre quienes quedan. Un empate en una plaza de descenso exige partido de desempate.')
+    return '\n\n'.join(lines)

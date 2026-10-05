@@ -101,7 +101,7 @@ def _missing_editorial_functions(core_dir):
     requirements = {
         'lpf_editorial_round.py': ('build_round_article', 'round_start_snapshot', 'build_editorial_piece',
             'piece_html', 'build_fixture_piece', 'build_need_piece', 'objective_proof'),
-        'lpf_relegation.py': ('current_relegation_picture', 'relegation_proof', 'explain_relegation_example', 'relegation_tree', 'relegation_tree_dot'),
+        'lpf_relegation.py': ('current_relegation_picture', 'relegation_proof', 'explain_relegation_example', 'relegation_tree', 'relegation_tree_dot', 'relegation_separate_routes', 'relegation_three_text'),
     }
     missing = []
     for filename, functions in requirements.items():
@@ -188,7 +188,7 @@ from lpf_editorial_definition import (
     guarantee_round_label as _editorial_guarantee_round_label,
     objective_context as _editorial_objective_context,
 )
-from lpf_relegation import current_relegation_picture, relegation_proof, explain_relegation_example, relegation_tree, relegation_tree_dot
+from lpf_relegation import current_relegation_picture, relegation_proof, explain_relegation_example, relegation_tree, relegation_tree_dot, relegation_separate_routes, relegation_three_text
 from lpf_snapshot import snapshot_average_totals
 from lpf_preview import preview_objective as _preview_objective, team_preview_text as _team_preview_text_core
 from lpf_display import (
@@ -3131,7 +3131,7 @@ def promedio_que_necesita_texto(e, base, rest, prev, k=1, pend=None):
             if e not in (local, visitante):
                 continue
             rival = visitante if local == e else local
-            if rival in P and rival != e:
+            if rival in P and rival != e and rival in pelea:
                 cruces_con_equipo[rival] = cruces_con_equipo.get(rival, 0) + 1
         if cruces_con_equipo:
             condicionados = []
@@ -3152,7 +3152,7 @@ def promedio_que_necesita_texto(e, base, rest, prev, k=1, pend=None):
             if len(condicionados) > 6:
                 muestra += f" · y {len(condicionados) - 6} más"
             L.append(
-                f"**Si {e} gana todos:** sus rivales directos pierden necesariamente ese partido, por lo que "
+                f"**Si {e} gana todos:** sus rivales de la pelea por promedios pierden ese cruce, por lo que "
                 f"sus techos bajan. {muestra}."
             )
 
@@ -3274,6 +3274,16 @@ def lpf_anual_base(Z, apertura=None):
 def lpf_anual_df(Z, apertura=None):
     return liga_tabla_df(lpf_anual_base(Z, apertura))
 
+@st.cache_data(show_spinner=False, max_entries=64)
+def _relegation_routes_cached(annual, rest, pending, averages, team):
+    return relegation_separate_routes(annual, rest, pending, averages, team)
+
+
+def _joint_floor_payload(floor):
+    return {'minimum_possible':floor.minimo_posible, 'minimum_guarantee':floor.garantia_exacta,
+            'exacto':floor.exacto, 'estado':floor.estado}
+
+
 def lpf_descenso_texto(Z, rest, apertura=None, prev=None, n_anual=1, n_prom=1, equipo=None, pend=None):
     anual = lpf_anual_base(Z, apertura)
     n = len(anual)
@@ -3284,6 +3294,12 @@ def lpf_descenso_texto(Z, rest, apertura=None, prev=None, n_anual=1, n_prom=1, e
     if equipo:
         if equipo not in anual:
             return f"No encuentro a **{equipo}** en las zonas cargadas."
+        prom_totales = promedio_totales(anual, Z, prev or {})
+        if int(n_anual)==1 and int(n_prom)==1 and prom_totales and pend:
+            separated = _relegation_routes_cached(anual, rest, list(pend), prom_totales, equipo)
+            joint = _piso_no_descenso_cached(anual, rest, list(pend), equipo,
+                n_anual=1, prom_totales=prom_totales, n_prom=1)
+            return editorialize_text(relegation_three_text(equipo, separated, _joint_floor_payload(joint)))
         k_salvarse = max(1, n - n_anual)
         pts_e = anual[equipo]["pts"]; gx = rest.get(equipo, 0); techo = pts_e + 3 * gx
         pos_anual = 1 + sum(1 for x in anual if x != equipo and
@@ -13302,6 +13318,22 @@ def _render_need_editorial(E, *, objective=None):
                 kwargs['zone'] = zone
             result = _lpf_service_result('objective_points', E, **kwargs)
         piece = build_need_piece(team, objective, result)
+        if objective == 'Descenso' and int(E.get('n_anual',1))==1 and int(E.get('n_prom',1))==1:
+            snapshot = _lpf_service_snapshot(E)
+            separated = _relegation_routes_cached(snapshot['annual'], snapshot['remaining'],
+                [(g['home'],g['away']) for g in snapshot['pending']], snapshot_average_totals(snapshot), team)
+            text = relegation_three_text(team, separated, piece['floor'])
+            sections = text.split('### ')
+            piece['title'] = editorialize_text(team)+': anual, promedios y permanencia'
+            piece['cards'] = []
+            for section in sections[1:]:
+                heading, body = section.split('\n',1)
+                if heading.startswith('2.'):
+                    body = body.split('- Si ')[0].strip() + '\n\nLa tabla de abajo compara los puntos que necesita contra cada rival de esta pelea.'
+                piece['cards'].append({'title':heading, 'body':body})
+            piece['text'] = text
+            piece['note'] = 'Las cuentas aisladas de anual y promedios se explican por separado; la tercera aplica las dos vías y la reasignación al mismo fixture.'
+
     except (_LPFServiceContractError, ValueError) as exc:
         ui_warning(str(exc))
         return
@@ -13311,7 +13343,21 @@ def _render_need_editorial(E, *, objective=None):
         ui_markdown('### ' + piece['cards'][0]['title'])
         ui_markdown(piece['cards'][0]['body'])
     for card in piece['cards'][1:]:
-        ui_markdown('**' + card['title'] + ':** ' + card['body'])
+        with st.container(border=True):
+            ui_markdown('### ' + card['title'])
+            ui_markdown(card['body'])
+    if objective == 'Descenso' and 'separated' in locals():
+        for route, label in [('annual','Tabla anual · si el rival suma X, cuánto necesita para superarlo'),
+                             ('average','Promedios · si el rival suma X, cuánto necesita para superarlo')]:
+            with st.expander(label, expanded=route=='average'):
+                rows = [{'Rival de la pelea':editorialize_text(r['rival']),
+                    'Si el rival suma':r['rival_adds'],
+                    'Necesita sumar para superarlo':r['own_adds_to_pass'] if r['own_adds_to_pass'] is not None else 'Fuera de alcance',
+                    'Suma que lo iguala':r['own_adds_to_tie'] if r['own_adds_to_tie'] is not None else 'Sin igualdad alcanzable'} for r in separated[route]['thresholds']]
+                if rows:
+                    ui_dataframe(pd.DataFrame(rows).astype(str), hide_index=True, use_container_width=True,
+                        export_title='Qué necesita por '+route, export_name='necesita_'+route)
+                ui_caption('Se muestran todos los puntajes que el rival puede sumar con sus partidos restantes. Superarlo y empatarlo son distintos: una igualdad en descenso exige desempate. Son requisitos aritméticos bajo su puntaje supuesto; la tercera cuenta comprueba la compatibilidad del fixture y la permanencia conjunta. En la anual se debe excluir primero al descendido por promedios.')
     ui_caption(piece['note'])
     floor = piece['floor']
     snap_for_key = _lpf_service_snapshot(E)
