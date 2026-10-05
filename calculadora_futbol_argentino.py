@@ -48,7 +48,7 @@ def _missing_editorial_functions(core_dir):
     import ast as _ast_boot
     requirements = {
         'lpf_editorial_round.py': ('build_round_article', 'round_start_snapshot', 'build_editorial_piece',
-            'piece_html', 'build_fixture_piece', 'build_need_piece', 'objective_proof'),
+            'piece_html', 'build_fixture_piece', 'build_need_piece', 'objective_proof', 'round_objective_alerts', 'round_relegation_alerts'),
         'lpf_relegation.py': ('current_relegation_picture', 'relegation_proof', 'explain_relegation_example'),
     }
     missing = []
@@ -100,7 +100,7 @@ def _missing_editorial_functions(core_dir):
     import ast as _ast_boot
     requirements = {
         'lpf_editorial_round.py': ('build_round_article', 'round_start_snapshot', 'build_editorial_piece',
-            'piece_html', 'build_fixture_piece', 'build_need_piece', 'objective_proof'),
+            'piece_html', 'build_fixture_piece', 'build_need_piece', 'objective_proof', 'round_objective_alerts', 'round_relegation_alerts'),
         'lpf_relegation.py': ('current_relegation_picture', 'relegation_proof', 'explain_relegation_example', 'relegation_tree', 'relegation_tree_dot', 'relegation_separate_routes', 'relegation_three_text'),
     }
     missing = []
@@ -180,7 +180,7 @@ from lpf_pisos import (
 )
 from lpf_competitive_context import competition_context, historical_reference
 from lpf_conditionals import branch_explanation, editorial_blocks, ordered_editorial_blocks, key_rival_matrix, next_round_conditionals
-from lpf_editorial_round import build_round_article, round_start_snapshot, build_editorial_piece, piece_html, build_fixture_piece, build_need_piece, objective_proof
+from lpf_editorial_round import build_round_article, round_start_snapshot, build_editorial_piece, piece_html, build_fixture_piece, build_need_piece, objective_proof, round_objective_alerts, round_relegation_alerts
 from lpf_copa_argentina import ALIVE as _CUP_ALIVE, UPDATED as _CUP_UPDATED, SOURCE as _CUP_SOURCE, SEMIFINALS as _CUP_SEMIS, normalize_alive as _normalize_cup_alive, sync_copa_state as _sync_copa_state
 from lpf_editorial_definition import (
     all_teams_matrix, branch_cell, branch_state, definition_clock, fight_zone,
@@ -9543,6 +9543,8 @@ def render_newsroom(E, section="informe", show_header=True):
                     Z, rest, E.get("apertura") or {}, previous, E.get("n_anual", 1), E.get("n_prom", 1)
                 ))
 
+        date_alerts = _render_round_definition_alerts(E, team=team)
+
         ui_markdown("#### EXACTO · Qué se sabe y qué necesita")
         if objective == "Playoffs":
             exact = lpf_playoffs_texto(team, Z, rest, pending, jugados=E.get("jugados") or [])
@@ -9709,6 +9711,8 @@ def render_newsroom(E, section="informe", show_header=True):
             ui_caption("No se mezcla con el bloque exacto: activalo sólo cuando necesites una probabilidad publicable.")
 
         publishable = _rd_publication(team, objective, mode, exact, Z, annual, rest)
+        if date_alerts:
+            publishable += "\n\n" + date_alerts
         with st.expander("Texto listo para copiar a la nota", expanded=False):
             st.text_area("Titular + bajada + cuerpo", publishable, height=360, label_visibility="collapsed")
             st.download_button("Descargar .md", publishable.encode("utf-8"),
@@ -9732,6 +9736,7 @@ def render_newsroom(E, section="informe", show_header=True):
                     ui_info(f"Hay {len(_atr2)} partido(s) postergado(s) de fecha(s) anterior(es). "
                             f"Los incluyo abajo, marcados como **Postergado**, porque se juegan en esta ventana.")
         if next_games:
+            _render_round_definition_alerts(E, games=next_games, round_no=next_date)
             ui_markdown("##### Narrativa para la previa")
             _nm1, _nm2 = st.columns([1, 1.35])
             with _nm1:
@@ -13000,6 +13005,100 @@ def render_cierre_por_zona(E):
                            mime="text/markdown", key="cierre_md")
 
 
+def _render_round_definition_alerts(E, *, team=None, zones=None, pending=None, games=None, round_no=None):
+    """Avisos visibles antes de la nota; devuelve el mismo texto para exportar."""
+    snapshot = _lpf_service_snapshot(E)
+    current_zones = snapshot.get('zones') or {}
+    zones = zones if zones is not None else current_zones
+    all_pending = list(pending) if pending is not None else [(g['home'],g['away']) for g in snapshot.get('pending') or []]
+    if games is None:
+        round_no, games, _ = lpf_jornada_actual(all_pending)
+    games = [tuple(g) for g in (games or []) if tuple(g) in all_pending]
+    if not games:
+        return ''
+    annual = {t:dict(r) for t,r in (snapshot.get('annual') or {}).items()}
+    averages = snapshot_average_totals(snapshot) or {}
+    old = {t:r for z in current_zones.values() for t,r in z.items()}
+    selected = {t:r for z in zones.values() for t,r in z.items()}
+    # Una previa reconstruida debe quitar los finales posteriores también de la
+    # anual y de los totales de promedios, sin tocar los antecedentes históricos.
+    for t,row in selected.items():
+        if t in annual and t in old:
+            delta_pts=int(old[t]['pts'])-int(row['pts'])
+            delta_pj=int(old[t].get('pj',0))-int(row.get('pj',0))
+            for key in ('pts','pj','gf','gc','dg'):
+                annual[t][key]=int(annual[t].get(key,0))-(int(old[t].get(key,0))-int(row.get(key,0)))
+            if t in averages:
+                ap,aj=averages[t];averages[t]=(ap-delta_pts,aj-delta_pj)
+    rest=({t:int(snapshot.get('remaining',{}).get(t,0)) for t in selected} if pending is None
+        else {t:sum(t in g for g in all_pending) for t in selected})
+    teams=[team] if team else sorted({t for g in games for t in g if t in selected})
+    qi=snapshot.get('qualification_inputs') or {}
+    champs=qi.get('champions') or {};intl=qi.get('international_champions') or {}
+    texts=[];detail=[];resolved=[];pending_checks=[]
+    labels={'Playoffs':('asegura los playoffs','queda sin chances de playoffs'),
+        'Libertadores':('asegura un cupo de Libertadores por la anual','queda sin chances de Libertadores por la anual'),
+        'Al menos Sudamericana':('asegura al menos un cupo de Sudamericana por la anual','queda sin chances de copas por la anual'),
+        'Descenso':('asegura la permanencia por ambas vías','queda matemáticamente descendido')}
+    with st.spinner('Comprobando qué puede definirse en esta fecha…'):
+        for t in teams:
+            if not any(t in g for g in games):
+                pending_checks.append(editorialize_text(t)+': su partido de esta fecha ya terminó o no está pendiente; no se anticipa otro resultado.')
+                continue
+            for objective in labels:
+                domain='playoffs' if objective=='Playoffs' else 'descenso' if objective=='Descenso' else 'copas'
+                ready,_ = _lpf_domain_ready(E,domain)
+                if not ready:
+                    pending_checks.append(editorialize_text(t)+' · '+objective+': datos bloqueados; no se publican condiciones.')
+                    continue
+                if objective=='Descenso':
+                    if int(E.get('n_anual',1))!=1 or int(E.get('n_prom',1))!=1:
+                        pending_checks.append(editorialize_text(t)+': el aviso conjunto requiere un descenso por cada vía.')
+                        continue
+                    answer=round_relegation_alerts(annual,rest,all_pending,averages,games,t)
+                else:
+                    zone=next((lab for lab,z in zones.items() if t in z),None)
+                    ctx=_editorial_objective_context(zones,objective=objective,zone=zone,
+                        direct_annual=annual,opening_rounds=LPF_APERTURA_PJ,
+                        camps=tuple(champs.get(k,'') for k in ('apertura','clausura','copa_argentina')),
+                        extras=tuple(intl.get(k,'') for k in ('libertadores','sudamericana')),
+                        copa_replacement=qi.get('copa_argentina_replacement',''),playoff_cutoff=8)
+                    if not ctx or not ctx.get('base'):continue
+                    if t not in ctx['base']:
+                        resolved.append(editorialize_text(t)+' · '+objective+': ya tiene Libertadores por una vía directa.')
+                        continue
+                    answer=round_objective_alerts(ctx['base'],rest,all_pending,games,t,ctx['cutoff'])
+                if answer.get('resolved'):
+                    resolved.append(editorialize_text(t)+' · '+objective+': '+labels[objective][0 if answer['resolved']=='in' else 1]+' con la foto actual.')
+                if not answer.get('available') or answer.get('incomplete'):
+                    pending_checks.append(editorialize_text(t)+' · '+objective+': '+(answer.get('reason') or 'hay ramas sin comprobación completa.'))
+                for event in answer.get('events') or []:
+                    line='**'+editorialize_text(t)+' · '+objective+':** '+editorialize_text(event['condition'])+', '+labels[objective][0 if event['state']=='in' else 1]+'.'
+                    texts.append(line)
+                if answer.get('events'):detail.append(objective+': '+answer.get('note',''))
+    title='Qué puede definirse'+(f' en la fecha {round_no}' if round_no else ' en esta fecha')
+    note=('Asegurar una plaza equivale a no poder perderla al final del torneo; estar dentro del corte al terminar esta fecha es otra cosa. '
+        'Copas: cuenta por Tabla Anual y plazas directas confirmadas; las otras vías y futuros campeones pueden cambiar el reparto. '
+        'Descenso: se comprueban anual y promedios juntos, excluyendo de la anual al descendido por promedio.')
+    with st.expander('🚨 '+title, expanded=True):
+        if texts:
+            for line in texts[:8]:ui_markdown(line)
+            if len(texts)>8:
+                with st.expander('Todas las alternativas comprobadas',expanded=False):
+                    for line in texts[8:]:ui_markdown(line)
+        else:
+            ui_info('No apareció una condición suficiente de definición en las ramas comprobadas. Esto no demuestra que sea imposible definir con otra combinación de resultados.')
+        ui_caption(note)
+        ui_caption('Los avisos son condiciones suficientes, no pronósticos. En descenso se comprueba el partido propio y una cancha rival; pueden existir más combinaciones. En playoffs y copas se usa el criterio de puntos y techos restantes.')
+        if resolved:
+            with st.expander('Objetivos ya resueltos en la foto actual',expanded=False):
+                for line in dict.fromkeys(resolved):ui_markdown('- '+line)
+        if pending_checks:
+            with st.expander('Datos y comprobaciones pendientes',expanded=False):
+                for line in dict.fromkeys(pending_checks):ui_caption(line)
+    return '\n\n'.join(['## '+title,*texts,note,*dict.fromkeys(detail),*dict.fromkeys(pending_checks)])
+
+
 def render_round_editorial(E):
     """Previa o actualización por zona, con la estructura de una nota."""
     _page_header('📅', 'Informe de la fecha', 'Panorama, cruces y cuentas de los 30 equipos')
@@ -13044,7 +13143,10 @@ def render_round_editorial(E):
     selected_team = c2.selectbox('Equipo de la pieza', team_options, format_func=editorialize_text, key='editorial_team_filter')
     selected = [b for b in article['teams'] if (zone_filter == 'Las dos' or zone_filter == f'Zona {b["zone"]}') and
                 (selected_team == 'Todos' or b['team'] == selected_team)]
-    text_lines = [article['title'], article['subtitle'], article['scope'], article['intro']]
+    alert_games = [tuple(p) for p in pending if round_map.get(tuple(p)) == int(round_no)]
+    alerts = _render_round_definition_alerts(E, team=None if selected_team=='Todos' else selected_team,
+        zones=zones, pending=pending, games=alert_games, round_no=round_no)
+    text_lines = [article['title'], article['subtitle'], article['scope'], article['intro'], alerts]
     if article['key_matches']:
         text_lines += ['Cruces de la fecha', *article['key_matches']]
     previous_zone = None

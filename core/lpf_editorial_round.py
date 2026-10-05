@@ -403,3 +403,119 @@ def objective_proof(base, pending, team, cutoff, target):
                 outcomes.append((h,a,code))
             out['examples'].append({'label':label,'route':mode,'final_points':final,'outcomes':outcomes})
     return out
+
+
+def _alert_paths(rows, matches):
+    """Comprime alternativas completas sin cambiar su significado."""
+    from lpf_conditionals import complete_condition_paths
+    return complete_condition_paths([{'other_outcomes':r['codes'], 'season_state':r['state'],
+        'round_state':'out'} for r in rows], matches)
+
+
+def round_objective_alerts(base, remaining, pending, games, team, cutoff, *, max_variable_matches=8):
+    """Condiciones suficientes de definición por puntos y techos, no posición de hoy.
+
+    Enumera sólo canchas cuyos resultados pueden cambiar los dos conteos. Las
+    omitidas son constantes para todas las ramas propias; sus PJ se descuentan.
+    Un estado abierto no certifica la existencia de un cierre del fixture.
+    """
+    from itertools import product
+    from lpf_conditionals import _apply, _rest_after_round, _own_code, _dedupe_relevant
+    games=_dedupe_relevant(base,games)
+    own=[g for g in games if team in g]
+    if len(own)!=1:return {'available':False,'reason':'No hay un único partido propio pendiente en esta fecha.', 'events':[]}
+    own=own[0]
+    if any(tuple(g) not in [tuple(p) for p in pending] for g in games):
+        return {'available':False,'reason':'Hay partidos de la fecha fuera del fixture pendiente.', 'events':[]}
+    if any(sum(t in g for g in pending)!=int(remaining.get(t,0)) for t in base):
+        return {'available':False,'reason':'El fixture pendiente no coincide con los partidos restantes.', 'events':[]}
+    now={t:int(r['pts']) for t,r in base.items()}
+    current=_season_state(now,remaining,team,int(cutoff))
+    if current!='pelea':return {'available':True,'resolved':current,'events':[]}
+    after=_rest_after_round(base,remaining,games)
+    others=[g for g in games if g!=own]
+    effective=[]
+    for g in others:
+        variable=False
+        for t in g:
+            if t not in base:continue
+            for gain in (0,1,3):
+                own_pts=now[team]+gain;own_ceiling=own_pts+3*after[team]
+                values={(now[t]+a+3*after[t]>=own_pts,now[t]+a>own_ceiling) for a in (0,1,3)}
+                if len(values)>1:variable=True
+        if variable:effective.append(g)
+    if len(effective)>max_variable_matches:
+        return {'available':False,'reason':f'Quedan {len(effective)} canchas variables: no terminó la enumeración de condiciones.', 'events':[]}
+    ignored=[g for g in others if g not in effective]
+    events=[]
+    for result,label in [('G','gana'),('E','empata'),('P','pierde')]:
+        rows=[]
+        own_code=_own_code(own,team,result)
+        for codes in product('LEV',repeat=len(effective)):
+            points=_apply(base,[own,*effective,*ignored],(own_code,*codes,*(['E']*len(ignored))))
+            rows.append({'codes':codes,'state':_season_state(points,after,team,int(cutoff))})
+        for path in _alert_paths(rows,effective):
+            if path['season_state']=='pelea':continue
+            conditions=path['text'].replace(' Y ',' y ') if path['conditions'] else ''
+            events.append({'state':path['season_state'],'own_result':result,
+                'condition':f'Si {label}' + (f' y {conditions}' if conditions else ''),
+                'conditions':path['conditions']})
+    return {'available':True,'events':events,'method':'points-and-ceilings',
+        'note':'Condiciones suficientes comprobadas con puntos y techos restantes. Abierto no significa que no pueda definirse mediante otras restricciones del fixture. No se calculan probabilidades.'}
+
+
+def round_relegation_alerts(annual,remaining,pending,averages,games,team):
+    """Avisos conjuntos: partido propio y una cancha rival, resto libre.
+
+    Publica sólo garantías o imposibilidad de salvarse comprobadas por el solver.
+    Las condiciones publicadas son suficientes, no una lista exhaustiva de todas
+    las combinaciones de la fecha. Empates favorables cuentan como salvación
+    posible: out nunca significa simplemente estar último o ir a desempate.
+    """
+    from fractions import Fraction
+    from lpf_relegation import relegation_state_with_results
+    own=[g for g in games if team in g]
+    if len(own)!=1:return {'available':False,'reason':'No hay un único partido propio pendiente en esta fecha.', 'events':[]}
+    if not averages or set(annual)-set(averages):
+        return {'available':False,'reason':'Faltan antecedentes de promedios.', 'events':[]}
+    if any(tuple(g) not in [tuple(p) for p in pending] for g in games):
+        return {'available':False,'reason':'Hay partidos de la fecha fuera del fixture pendiente.', 'events':[]}
+    if team not in annual or any(sum(t in g for g in pending)!=int(remaining.get(t,0)) for t in annual):
+        return {'available':False,'reason':'El fixture pendiente no coincide con los partidos restantes.', 'events':[]}
+    if any(j+remaining.get(t,0)<=0 for t,(p,j) in averages.items()):
+        return {'available':False,'reason':'Denominadores de promedios inválidos.', 'events':[]}
+    own=tuple(own[0]);ap,aj=averages[team];den=aj+remaining[team]
+    # Dos clubes debajo en la anual dejan uno aun si el otro baja por promedios.
+    annual_below=[t for t in annual if t!=team and int(annual[t]['pts'])+3*remaining[t]<int(annual[team]['pts'])]
+    avg_below=[t for t,(p,j) in averages.items() if t!=team and Fraction(p+3*remaining[t],j+remaining[t])<Fraction(ap,den)]
+    if len(annual_below)>=2 and avg_below:return {'available':True,'resolved':'in','events':[]}
+    current=relegation_state_with_results(annual,remaining,pending,averages,team,{})
+    if current['state'] in ('in','out'):return {'available':True,'resolved':current['state'],'events':[]}
+    rivals=sorted((t for t in annual if t!=team),key=lambda t:(Fraction(averages[t][0],averages[t][1]+remaining[t]),int(annual[t]['pts'])))
+    other=next((tuple(g) for rival in rivals for g in games if rival in g and tuple(g)!=own and team not in g),None)
+    effective=[other] if other else []
+    events=[];incomplete=current['state']=='unknown'
+    for result,label in [('G','gana'),('E','empata'),('P','pierde')]:
+        code='E' if result=='E' else ('L' if (result=='G')==(own[0]==team) else 'V')
+        alone=relegation_state_with_results(annual,remaining,pending,averages,team,{own:code})
+        if alone['state'] in ('in','out'):
+            events.append({'state':alone['state'],'own_result':result,'condition':f'Si {label}', 'conditions':[]})
+            continue
+        incomplete |= alone['state']=='unknown'
+        rows=[]
+        for other_code in ('L','E','V') if other else ():
+            state=relegation_state_with_results(annual,remaining,pending,averages,team,{own:code,other:other_code})
+            incomplete |= state['state']=='unknown'
+            rows.append({'codes':(other_code,),'state':state['state'] if state['state'] in ('in','out') else 'pelea'})
+        for path in _alert_paths(rows,effective):
+            if path['season_state']=='pelea':continue
+            conditions=path['text'].replace(' Y ',' y ') if path['conditions'] else ''
+            events.append({'state':path['season_state'],'own_result':result,
+                'condition':f'Si {label}'+(f' y {conditions}' if conditions else ''),'conditions':path['conditions']})
+    return {'available':True,'events':events,'incomplete':incomplete,'other_match':other,
+        'note':'Prueba conjunta de anual y promedios. Condiciones suficientes: las otras canchas y el resto del torneo quedan libres. Puede haber más alternativas con otras combinaciones. Descenso inevitable exige que no exista salvación ni con desempate favorable.'}
+
+
+from lpf_memo import memoize as _round_memoize
+round_objective_alerts = _round_memoize(round_objective_alerts)
+round_relegation_alerts = _round_memoize(round_relegation_alerts)
