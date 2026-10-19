@@ -1,11 +1,14 @@
 {
   "ok": true,
-  "updated_at": "2026-10-04T20:19:21.719706+00:00",
-  "fecha_min": 10,
-  "fecha_max": 11,
-  "resultados": 157,
-  "fuente": "Base fija F10 + LPF oficial desde F11",
-  "fuente_resultados": "Liga Profesional de Fútbol",
+  "updated_at": "2026-10-19T12:09:36+00:00",
+  "data_as_of": "2026-10-19T09:00:00-03:00",
+  "fecha_min": 12,
+  "fecha_max": 13,
+  "resultados": 192,
+  "fuente": "TyC Sports (resultados verificados hasta el domingo 18/10/2026; fecha 13 en curso)",
+  "fuente_resultados": "TyC Sports",
   "sin_confirmar": 0,
-  "avisos": []
+  "avisos": [
+    "La fecha 13 sigue en disputa; tres partidos programados el 19/10 no se cuentan como jugados."
+  ]
 }

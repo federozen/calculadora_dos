@@ -1,434 +1,434 @@
 {
   "schema": 1,
   "competition": "LPF Clausura 2026",
-  "source": "Base fija F10 + LPF oficial desde F11",
-  "updated_at": "2026-10-04T20:19:21.718670+00:00",
+  "source": "TyC Sports (resultados verificados hasta el domingo 18/10/2026; fecha 13 en curso)",
+  "updated_at": "2026-10-19T12:09:36+00:00",
   "zones": {
     "A": {
       "Instituto": {
-        "pts": 25,
-        "pj": 11,
-        "dg": 9,
-        "gf": 17,
-        "ga": 8
+        "pts": 29,
+        "pj": 13,
+        "dg": 10,
+        "gf": 20,
+        "ga": 10
       },
       "Vélez Sarsfield": {
-        "pts": 20,
-        "pj": 10,
-        "dg": 6,
-        "gf": 15,
-        "ga": 9
+        "pts": 24,
+        "pj": 13,
+        "dg": 5,
+        "gf": 18,
+        "ga": 13
       },
       "Defensa y Justicia": {
-        "pts": 21,
-        "pj": 11,
-        "dg": 5,
-        "gf": 16,
-        "ga": 11
-      },
-      "Gimnasia de Mendoza": {
-        "pts": 17,
-        "pj": 10,
-        "dg": 5,
-        "gf": 14,
-        "ga": 9
-      },
-      "Boca Juniors": {
-        "pts": 20,
-        "pj": 11,
+        "pts": 24,
+        "pj": 13,
         "dg": 6,
-        "gf": 17,
-        "ga": 11
-      },
-      "Independiente": {
-        "pts": 17,
-        "pj": 11,
-        "dg": -1,
-        "gf": 11,
+        "gf": 18,
         "ga": 12
       },
+      "Gimnasia de Mendoza": {
+        "pts": 20,
+        "pj": 13,
+        "dg": 2,
+        "gf": 15,
+        "ga": 13
+      },
+      "Boca Juniors": {
+        "pts": 24,
+        "pj": 13,
+        "dg": 7,
+        "gf": 21,
+        "ga": 14
+      },
+      "Independiente": {
+        "pts": 19,
+        "pj": 13,
+        "dg": -1,
+        "gf": 12,
+        "ga": 13
+      },
       "Lanús": {
-        "pts": 17,
-        "pj": 11,
-        "dg": 4,
-        "gf": 13,
+        "pts": 23,
+        "pj": 13,
+        "dg": 7,
+        "gf": 16,
         "ga": 9
       },
       "Newell's Old Boys": {
         "pts": 17,
-        "pj": 11,
-        "dg": 3,
+        "pj": 12,
+        "dg": 2,
         "gf": 11,
-        "ga": 8
+        "ga": 9
       },
       "Unión": {
         "pts": 13,
-        "pj": 11,
-        "dg": -2,
+        "pj": 12,
+        "dg": -4,
         "gf": 17,
-        "ga": 19
+        "ga": 21
       },
       "San Lorenzo": {
-        "pts": 11,
-        "pj": 11,
-        "dg": -7,
-        "gf": 4,
-        "ga": 11
+        "pts": 17,
+        "pj": 13,
+        "dg": -5,
+        "gf": 7,
+        "ga": 12
       },
       "Estudiantes de La Plata": {
-        "pts": 10,
-        "pj": 10,
-        "dg": -1,
-        "gf": 10,
-        "ga": 11
-      },
-      "Deportivo Riestra": {
-        "pts": 10,
-        "pj": 10,
-        "dg": -2,
-        "gf": 8,
-        "ga": 10
-      },
-      "Platense": {
-        "pts": 9,
-        "pj": 10,
-        "dg": -6,
-        "gf": 9,
+        "pts": 14,
+        "pj": 13,
+        "dg": 1,
+        "gf": 16,
         "ga": 15
       },
+      "Deportivo Riestra": {
+        "pts": 11,
+        "pj": 12,
+        "dg": -3,
+        "gf": 9,
+        "ga": 12
+      },
+      "Platense": {
+        "pts": 11,
+        "pj": 13,
+        "dg": -7,
+        "gf": 12,
+        "ga": 19
+      },
       "Talleres": {
-        "pts": 8,
-        "pj": 10,
-        "dg": -6,
-        "gf": 11,
-        "ga": 17
+        "pts": 9,
+        "pj": 13,
+        "dg": -8,
+        "gf": 12,
+        "ga": 20
       },
       "Central Córdoba": {
-        "pts": 8,
-        "pj": 10,
+        "pts": 10,
+        "pj": 12,
         "dg": -6,
-        "gf": 7,
-        "ga": 13
+        "gf": 10,
+        "ga": 16
       }
     },
     "B": {
       "Argentinos Juniors": {
-        "pts": 18,
-        "pj": 10,
-        "dg": 4,
-        "gf": 13,
-        "ga": 9
+        "pts": 25,
+        "pj": 13,
+        "dg": 6,
+        "gf": 17,
+        "ga": 11
       },
       "Rosario Central": {
-        "pts": 18,
-        "pj": 10,
-        "dg": 3,
-        "gf": 11,
-        "ga": 8
+        "pts": 25,
+        "pj": 13,
+        "dg": 9,
+        "gf": 20,
+        "ga": 11
       },
       "Gimnasia La Plata": {
-        "pts": 18,
-        "pj": 11,
-        "dg": 0,
-        "gf": 16,
-        "ga": 16
+        "pts": 22,
+        "pj": 13,
+        "dg": 1,
+        "gf": 19,
+        "ga": 18
       },
       "Independiente Rivadavia": {
-        "pts": 18,
-        "pj": 11,
-        "dg": 1,
-        "gf": 15,
-        "ga": 14
+        "pts": 19,
+        "pj": 13,
+        "dg": -4,
+        "gf": 17,
+        "ga": 21
       },
       "Belgrano": {
-        "pts": 16,
-        "pj": 10,
+        "pts": 22,
+        "pj": 13,
         "dg": 4,
-        "gf": 11,
-        "ga": 7
+        "gf": 14,
+        "ga": 10
       },
       "Huracán": {
         "pts": 19,
-        "pj": 11,
-        "dg": 3,
-        "gf": 11,
-        "ga": 8
-      },
-      "Sarmiento": {
-        "pts": 16,
-        "pj": 10,
-        "dg": 1,
-        "gf": 17,
-        "ga": 16
-      },
-      "River Plate": {
-        "pts": 13,
-        "pj": 10,
-        "dg": 1,
-        "gf": 13,
+        "pj": 13,
+        "dg": 0,
+        "gf": 12,
         "ga": 12
       },
+      "Sarmiento": {
+        "pts": 20,
+        "pj": 12,
+        "dg": 3,
+        "gf": 21,
+        "ga": 18
+      },
+      "River Plate": {
+        "pts": 20,
+        "pj": 13,
+        "dg": 5,
+        "gf": 18,
+        "ga": 13
+      },
       "Atlético Tucumán": {
-        "pts": 13,
-        "pj": 11,
-        "dg": 0,
-        "gf": 9,
-        "ga": 9
+        "pts": 14,
+        "pj": 13,
+        "dg": -1,
+        "gf": 12,
+        "ga": 13
       },
       "Tigre": {
-        "pts": 12,
-        "pj": 10,
-        "dg": 0,
-        "gf": 9,
-        "ga": 9
+        "pts": 13,
+        "pj": 13,
+        "dg": -2,
+        "gf": 13,
+        "ga": 15
       },
       "Barracas Central": {
-        "pts": 15,
-        "pj": 11,
-        "dg": -1,
-        "gf": 8,
+        "pts": 18,
+        "pj": 12,
+        "dg": 1,
+        "gf": 10,
         "ga": 9
       },
       "Banfield": {
-        "pts": 9,
-        "pj": 10,
+        "pts": 13,
+        "pj": 13,
         "dg": -5,
-        "gf": 11,
-        "ga": 16
+        "gf": 14,
+        "ga": 19
       },
       "Aldosivi": {
         "pts": 8,
-        "pj": 11,
-        "dg": -5,
-        "gf": 12,
-        "ga": 17
+        "pj": 13,
+        "dg": -8,
+        "gf": 14,
+        "ga": 22
       },
       "Racing": {
-        "pts": 8,
-        "pj": 10,
-        "dg": -5,
-        "gf": 11,
-        "ga": 16
+        "pts": 12,
+        "pj": 13,
+        "dg": -6,
+        "gf": 14,
+        "ga": 20
       },
       "Estudiantes de Río Cuarto": {
-        "pts": 6,
-        "pj": 10,
-        "dg": -8,
-        "gf": 5,
-        "ga": 13
+        "pts": 9,
+        "pj": 13,
+        "dg": -9,
+        "gf": 8,
+        "ga": 17
       }
     }
   },
   "annual": {
     "Instituto": {
-      "pts": 46,
-      "pj": 27,
-      "dg": 9,
-      "gf": 34,
-      "ga": 25
+      "pts": 50,
+      "pj": 29,
+      "dg": 10,
+      "gf": 37,
+      "ga": 27
     },
     "Vélez Sarsfield": {
-      "pts": 48,
-      "pj": 26,
-      "dg": 12,
-      "gf": 33,
-      "ga": 21
+      "pts": 52,
+      "pj": 29,
+      "dg": 11,
+      "gf": 36,
+      "ga": 25
     },
     "Defensa y Justicia": {
-      "pts": 40,
-      "pj": 27,
-      "dg": 2,
-      "gf": 34,
-      "ga": 32
+      "pts": 43,
+      "pj": 29,
+      "dg": 3,
+      "gf": 36,
+      "ga": 33
     },
     "Gimnasia de Mendoza": {
-      "pts": 36,
-      "pj": 26,
-      "dg": -3,
-      "gf": 28,
-      "ga": 31
+      "pts": 39,
+      "pj": 29,
+      "dg": -6,
+      "gf": 29,
+      "ga": 35
     },
     "Boca Juniors": {
-      "pts": 50,
-      "pj": 27,
-      "dg": 19,
-      "gf": 39,
-      "ga": 20
+      "pts": 54,
+      "pj": 29,
+      "dg": 20,
+      "gf": 43,
+      "ga": 23
     },
     "Independiente": {
-      "pts": 41,
-      "pj": 27,
+      "pts": 43,
+      "pj": 29,
       "dg": 3,
-      "gf": 35,
-      "ga": 32
+      "gf": 36,
+      "ga": 33
     },
     "Lanús": {
-      "pts": 41,
-      "pj": 27,
-      "dg": 7,
-      "gf": 31,
+      "pts": 47,
+      "pj": 29,
+      "dg": 10,
+      "gf": 34,
       "ga": 24
     },
     "Newell's Old Boys": {
       "pts": 32,
-      "pj": 27,
-      "dg": -9,
+      "pj": 28,
+      "dg": -10,
       "gf": 26,
-      "ga": 35
+      "ga": 36
     },
     "Unión": {
       "pts": 34,
-      "pj": 27,
-      "dg": 2,
+      "pj": 28,
+      "dg": 0,
       "gf": 41,
-      "ga": 39
+      "ga": 41
     },
     "San Lorenzo": {
-      "pts": 33,
-      "pj": 27,
-      "dg": -7,
-      "gf": 18,
-      "ga": 25
+      "pts": 39,
+      "pj": 29,
+      "dg": -5,
+      "gf": 21,
+      "ga": 26
     },
     "Estudiantes de La Plata": {
-      "pts": 41,
-      "pj": 26,
-      "dg": 11,
-      "gf": 29,
-      "ga": 18
+      "pts": 45,
+      "pj": 29,
+      "dg": 13,
+      "gf": 35,
+      "ga": 22
     },
     "Deportivo Riestra": {
-      "pts": 21,
-      "pj": 26,
-      "dg": -9,
-      "gf": 13,
-      "ga": 22
-    },
-    "Platense": {
-      "pts": 25,
-      "pj": 26,
-      "dg": -11,
-      "gf": 19,
-      "ga": 30
-    },
-    "Talleres": {
-      "pts": 34,
-      "pj": 26,
-      "dg": -2,
-      "gf": 28,
-      "ga": 30
-    },
-    "Central Córdoba": {
-      "pts": 24,
-      "pj": 26,
-      "dg": -16,
-      "gf": 18,
-      "ga": 34
-    },
-    "Argentinos Juniors": {
-      "pts": 47,
-      "pj": 26,
-      "dg": 8,
-      "gf": 30,
-      "ga": 22
-    },
-    "Rosario Central": {
-      "pts": 46,
-      "pj": 26,
-      "dg": 7,
-      "gf": 31,
+      "pts": 22,
+      "pj": 28,
+      "dg": -10,
+      "gf": 14,
       "ga": 24
     },
+    "Platense": {
+      "pts": 27,
+      "pj": 29,
+      "dg": -12,
+      "gf": 22,
+      "ga": 34
+    },
+    "Talleres": {
+      "pts": 35,
+      "pj": 29,
+      "dg": -4,
+      "gf": 29,
+      "ga": 33
+    },
+    "Central Córdoba": {
+      "pts": 26,
+      "pj": 28,
+      "dg": -16,
+      "gf": 21,
+      "ga": 37
+    },
+    "Argentinos Juniors": {
+      "pts": 54,
+      "pj": 29,
+      "dg": 10,
+      "gf": 34,
+      "ga": 24
+    },
+    "Rosario Central": {
+      "pts": 53,
+      "pj": 29,
+      "dg": 13,
+      "gf": 40,
+      "ga": 27
+    },
     "Gimnasia La Plata": {
-      "pts": 44,
-      "pj": 27,
-      "dg": 0,
-      "gf": 35,
-      "ga": 35
+      "pts": 48,
+      "pj": 29,
+      "dg": 1,
+      "gf": 38,
+      "ga": 37
     },
     "Independiente Rivadavia": {
-      "pts": 52,
-      "pj": 27,
-      "dg": 15,
-      "gf": 44,
-      "ga": 29
+      "pts": 53,
+      "pj": 29,
+      "dg": 10,
+      "gf": 46,
+      "ga": 36
     },
     "Belgrano": {
-      "pts": 42,
-      "pj": 26,
+      "pts": 48,
+      "pj": 29,
       "dg": 8,
-      "gf": 28,
-      "ga": 20
+      "gf": 31,
+      "ga": 23
     },
     "Huracán": {
       "pts": 41,
-      "pj": 27,
-      "dg": 7,
-      "gf": 28,
-      "ga": 21
+      "pj": 29,
+      "dg": 4,
+      "gf": 29,
+      "ga": 25
     },
     "Sarmiento": {
-      "pts": 35,
-      "pj": 26,
-      "dg": -6,
-      "gf": 30,
-      "ga": 36
+      "pts": 39,
+      "pj": 28,
+      "dg": -4,
+      "gf": 34,
+      "ga": 38
     },
     "River Plate": {
-      "pts": 42,
-      "pj": 26,
-      "dg": 11,
-      "gf": 35,
-      "ga": 24
+      "pts": 49,
+      "pj": 29,
+      "dg": 15,
+      "gf": 40,
+      "ga": 25
     },
     "Atlético Tucumán": {
-      "pts": 27,
-      "pj": 27,
-      "dg": -5,
-      "gf": 24,
-      "ga": 29
+      "pts": 28,
+      "pj": 29,
+      "dg": -6,
+      "gf": 27,
+      "ga": 33
     },
     "Tigre": {
-      "pts": 32,
-      "pj": 26,
-      "dg": 3,
-      "gf": 27,
-      "ga": 24
+      "pts": 33,
+      "pj": 29,
+      "dg": 1,
+      "gf": 31,
+      "ga": 30
     },
     "Barracas Central": {
-      "pts": 36,
-      "pj": 27,
-      "dg": -1,
-      "gf": 23,
+      "pts": 39,
+      "pj": 28,
+      "dg": 1,
+      "gf": 25,
       "ga": 24
     },
     "Banfield": {
-      "pts": 27,
-      "pj": 26,
+      "pts": 31,
+      "pj": 29,
       "dg": -7,
-      "gf": 28,
-      "ga": 35
+      "gf": 31,
+      "ga": 38
     },
     "Aldosivi": {
       "pts": 16,
-      "pj": 27,
-      "dg": -18,
-      "gf": 18,
-      "ga": 36
+      "pj": 29,
+      "dg": -21,
+      "gf": 20,
+      "ga": 41
     },
     "Racing": {
-      "pts": 29,
-      "pj": 26,
-      "dg": -3,
-      "gf": 28,
-      "ga": 31
+      "pts": 33,
+      "pj": 29,
+      "dg": -4,
+      "gf": 31,
+      "ga": 35
     },
     "Estudiantes de Río Cuarto": {
-      "pts": 11,
-      "pj": 26,
-      "dg": -27,
-      "gf": 10,
-      "ga": 37
+      "pts": 14,
+      "pj": 29,
+      "dg": -28,
+      "gf": 13,
+      "ga": 41
     }
   }
 }

@@ -777,9 +777,12 @@ def parse_tyc_clausura_results_html(
 ) -> list[dict]:
     """Extrae resultados del fixture vivo de TyC Sports para el Clausura 2026.
 
-    La página mantiene en un único documento el fixture futuro y, bajo el encabezado
-    ``Resultados del Torneo Clausura 2026``, los marcadores fecha por fecha. El parser
-    ignora todo lo anterior al encabezado de resultados y exige simultáneamente:
+    La página mantiene en un único documento el fixture y los marcadores.
+    La jornada EN CURSO figura arriba, bajo ``El fixture del Torneo Clausura 2026``;
+    si sólo leemos la sección histórica ``Resultados del Torneo Clausura 2026``,
+    perdemos los partidos recientes (caso River-Belgrano, fecha 13).
+    Ambas secciones se recorren, pero se acepta sólo marcador explícito y pareja
+    perteneciente exactamente a la jornada señalada. Exige simultáneamente:
 
     * una ``Fecha N`` activa;
     * dos clubes resolubles contra los nombres canónicos;
@@ -816,7 +819,8 @@ def parse_tyc_clausura_results_html(
             in_results = True
             current_round = int(round_article.group(1))
             continue
-        if "resultados del torneo clausura 2026" in folded:
+        if ("fixture del torneo clausura 2026" in folded
+                or "resultados del torneo clausura 2026" in folded):
             in_results = True
             current_round = None
             continue

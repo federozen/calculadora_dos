@@ -4695,13 +4695,25 @@ LPF_FECHAS_CLAUSURA = ["2026-07-26", "2026-07-29", "2026-08-02", "2026-08-09", "
                        "2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25", "2026-11-01",
                        "2026-11-08"]
 
+# Cierre REAL de las jornadas más recientes (no la fecha teórica del reglamento).
+# F11 tuvo Sarmiento-River el 14/10; F13 termina el LUNES 19/10.
+# No marcar una fecha como completada mientras aún quedan partidos ese día.
+LPF_CIERRES_CONFIRMADOS = {
+    11: "2026-10-14", 12: "2026-10-12", 13: "2026-10-19",
+    14: "2026-10-27", 15: "2026-11-02",
+}
+
 def lpf_fecha_esperada(hoy=None):
-    """Cuántas fechas del Clausura deberían estar jugadas hoy, según el calendario del reglamento."""
+    """Fechas cuyo último día programado ya terminó (hora de Argentina)."""
     import datetime as _dt
-    hoy = hoy or _dt.date.today()
+    from zoneinfo import ZoneInfo as _ZoneInfo
+    hoy = hoy or _dt.datetime.now(_ZoneInfo("America/Argentina/Buenos_Aires")).date()
+    if isinstance(hoy, _dt.datetime):
+        hoy = hoy.date()
     n = 0
-    for d in LPF_FECHAS_CLAUSURA:
-        if _dt.datetime.strptime(d, "%Y-%m-%d").date() <= hoy:
+    for f, apertura in enumerate(LPF_FECHAS_CLAUSURA, 1):
+        cierre = LPF_CIERRES_CONFIRMADOS.get(f, apertura)
+        if _dt.date.fromisoformat(cierre) < hoy:
             n += 1
     return n, len(LPF_FECHAS_CLAUSURA)
 
@@ -5873,12 +5885,14 @@ def cargar_lpf_espn(liga="arg.1"):
     tyc_played = []
     tyc_error = ""
     tyc_url = ""
-    if not official_complete:
-        try:
-            tyc_raw, _tyc_pending, tyc_url = tyc_clausura_results(zones, timeout=30, min_round=11)
-            tyc_played = normalize_results_for_zones(zones, tyc_raw or [])
-        except Exception as exc:
-            tyc_error = str(exc)
+    # Consultar SIEMPRE el fixture vivo: las zonas y las notas oficiales pueden
+    # estar atrasadas. Antes esta consulta se salteaba si la LPF explicaba una
+    # tabla F10/F11, aun cuando ya había finales F12/F13 (River-Belgrano).
+    try:
+        tyc_raw, _tyc_pending, tyc_url = tyc_clausura_results(zones, timeout=25, min_round=11)
+        tyc_played = normalize_results_for_zones(zones, tyc_raw or [])
+    except Exception as exc:
+        tyc_error = str(exc)
 
     tyc_complete = official_complete or _lpf_complete_results_for_zones(
         zones, manual_played, official_played, tyc_played, previous_played, builtin_played
@@ -12733,6 +12747,10 @@ def _global_team(teams):
 
 
 def _run_auto_update(rerun=True, budget=90):
+    """Actualiza la sesión, sin asumir que el disco de Streamlit Cloud es persistente."""
+    from datetime import datetime, timezone
+    st.session_state["_LPF_LAST_LIVE_ATTEMPT"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    previous_count = len((st.session_state.get("ESTADO") or {}).get("jugados") or [])
     with st.spinner(f"Actualizando a hoy desde LPF, ESPN, TyC y FutbolArgentino (máx. {budget} s)…"):
         try:
             with _web_http.time_budget(budget):
@@ -12742,15 +12760,29 @@ def _run_auto_update(rerun=True, budget=90):
     if _e:
         st.session_state["_UPDATE_MSG"] = (
             "warning",
-            "No pude actualizar desde las fuentes. Sigo con la última foto; podés reintentar o cargar "
-            "resultados a mano en Datos → Cargar y actualizar.",
+            "No pude actualizar desde las fuentes. Conservo la última foto verificada; "
+            "podés reintentar desde el botón Actualizar a hoy.",
             _e,
         )
         if rerun:
             st.rerun()
         return
-    _msg = (f"Actualizado desde {_r.get('fuente') or 'fuente automática'} ✓ · "
-            f"{_r['jug']} resultados · {_r['pend']} pendientes")
+    if not _r.get("network_confirmed"):
+        st.session_state["_UPDATE_MSG"] = (
+            "warning",
+            "No llegaron marcadores nuevos verificables desde la web. "
+            "Conservo la última foto confirmada incluida en el repositorio.",
+            " · ".join(str(x) for x in (_r.get("avisos_fuente") or [])[:3]),
+        )
+        if rerun:
+            st.rerun()
+        return
+    delta = max(0, int(_r.get("jug") or 0) - previous_count)
+    _msg = (
+        (f"Sumé {delta} partido(s) finalizado(s) desde las fuentes. " if delta else
+         "Fuentes consultadas; no se encontraron resultados finales nuevos. ")
+        + f"{_r['jug']} resultados · {_r['pend']} pendientes."
+    )
     _extra = []
     if _r.get("fixture_err"):
         _extra.append("No pude actualizar resultados: " + _r["fixture_err"])
@@ -12783,18 +12815,39 @@ def _sidebar_context():
             _pjs = [d.get("pj", 0) for b in (E.get("zonas_lpf") or {}).values() for d in b.values()]
             _loaded = min(_pjs) if _pjs else 0
             _expected, _total = lpf_fecha_esperada()
-            if _ok:
-                ui_caption(f"✅ Datos al día · fecha {_loaded} de {_total}")
+            _completed = {(l, v) for l, v, _gl, _gv in E.get("jugados", [])}
+            _in_progress = next((f for f in range(1, _total + 1)
+                                if 0 < sum((g["l"], g["v"]) in _completed
+                                           for g in LPF_FIXTURE if g["f"] == f) < 15
+                                and f >= _expected), None)
+            if _in_progress is not None:
+                _n_played = sum((g["l"], g["v"]) in _completed
+                                for g in LPF_FIXTURE if g["f"] == _in_progress)
+                _round_status = "en curso" if _in_progress > _expected else "incompleta"
+                ui_caption(f"⚽ Fecha {_in_progress} {_round_status} · {_n_played}/15 finalizados · "
+                           f"{15 - _n_played} pendientes")
+            elif _ok:
+                ui_caption(f"✅ Datos cargados hasta la fecha {_loaded} de {_total}")
             else:
-                ui_caption(f"⚠️ Datos hasta la fecha {_loaded} · según el calendario ya se jugaron {max(_expected, _loaded)} de {_total}")
+                ui_caption(f"⚠️ Datos hasta la fecha {_loaded} · "
+                           f"{max(_expected, _loaded)} jornadas ya deberían haber terminado")
             _meta = _lpf_update_meta()
             if _meta.get("updated_at"):
                 try:
                     import datetime as _dtm
                     _when = _dtm.datetime.fromisoformat(_meta["updated_at"]).astimezone(
                         _dtm.timezone(_dtm.timedelta(hours=-3))).strftime("%d/%m %H:%M")
-                    ui_caption(f"Última actualización automática: {_when}")
+                    ui_caption(f"Base guardada en GitHub: {_when} (Argentina)")
                 except Exception:
+                    pass
+            _last_live = st.session_state.get("_LPF_LAST_LIVE_ATTEMPT")
+            if _last_live:
+                try:
+                    import datetime as _dtm
+                    _when_live = _dtm.datetime.fromisoformat(_last_live).astimezone(
+                        _dtm.timezone(_dtm.timedelta(hours=-3))).strftime("%d/%m %H:%M")
+                    ui_caption(f"Última consulta en vivo en esta sesión: {_when_live}")
+                except (TypeError, ValueError):
                     pass
             st.button(
                 "🔄 Actualizar a hoy", use_container_width=True, type="secondary" if _ok else "primary",
@@ -13738,32 +13791,46 @@ if os.environ.get("LPF_DEBUG_TIMING"):
 else:
     _nav.run()
 
-# Una vez por sesión se intenta traer la fecha actual. Corre DESPUÉS de dibujar la
-# página (fragmento con temporizador), así la app se ve y se puede leer mientras
-# tanto; si las fuentes tardan o fallan, sigue con la última foto incluida y lo
-# avisa en el panel lateral.
-@st.fragment(run_every=1.5)
+# Streamlit Cloud: cada sesión abierta consulta la web cuando la foto quedó vieja.
+# Este fragmento se repite cada 10 minutos mientras la pestaña está activa, sin
+# tareas en segundo plano ni dependencia del disco efímero de Streamlit.
+# GitHub Actions sigue siendo responsable de PERSISTIR resultados en el repo.
+@st.fragment(run_every="10min")
 def _auto_update_tick():
-    if st.session_state.get("_AUTO_UPDATE_DONE"):
+    if not _data_behind_calendar():
         return
-    if not st.session_state.get("_AUTO_UPDATE_ARMED"):
-        st.session_state["_AUTO_UPDATE_ARMED"] = True
-        return
-    st.session_state["_AUTO_UPDATE_DONE"] = True
+    import time
+    now = time.monotonic()
+    last = st.session_state.get("_LPF_LAST_AUTO_ATTEMPT_MONO")
+    if isinstance(last, (int, float)) and now - last < 9 * 60:
+        return  # evita duplicados por reruns o aperturas del mismo usuario
+    st.session_state["_LPF_LAST_AUTO_ATTEMPT_MONO"] = now
     _run_auto_update(rerun=False, budget=30)
     st.rerun(scope="app")
 
 
 def _data_behind_calendar():
+    """PJ parciales no bastan: durante F13 el mínimo era 12, pero River ya tenía 13."""
+    import datetime as _dt
     _zones = (st.session_state.ESTADO or {}).get("zonas_lpf") or {}
     _pjs = [row.get("pj", 0) for base in _zones.values() for row in base.values()]
-    return (min(_pjs) if _pjs else 0) < lpf_fecha_esperada()[0]
+    if (min(_pjs) if _pjs else 0) < lpf_fecha_esperada()[0]:
+        return True
+    # Aunque la fecha actual no haya terminado, refrescar una foto vieja.
+    _stamp = _lpf_update_meta().get("updated_at")
+    if not _stamp:
+        return True
+    try:
+        _parsed = _dt.datetime.fromisoformat(str(_stamp).replace("Z", "+00:00"))
+        if _parsed.tzinfo is None:
+            _parsed = _parsed.replace(tzinfo=_dt.timezone.utc)
+        return (_dt.datetime.now(_dt.timezone.utc) - _parsed).total_seconds() > 7200
+    except (TypeError, ValueError):
+        return True
 
 
-if (
-    not st.session_state.get("_AUTO_UPDATE_DONE")
-    and (st.session_state.ESTADO or {}).get("modo") == "lpf2026"
-    and _data_behind_calendar()
-):
+if (st.session_state.ESTADO or {}).get("modo") == "lpf2026":
+    # Se deja registrado incluso cuando la foto está vigente; así puede volver a
+    # comprobar el estado más tarde sin que el usuario recargue la página.
     with st.sidebar:
         _auto_update_tick()
