@@ -13265,8 +13265,23 @@ def _render_round_definition_alerts(E, *, team=None, zones=None, pending=None, g
                         report['reason'] = 'La cuenta conjunta requiere un descenso por cada vía.'
                         reports[objective].append(report)
                         continue
-                    answer = round_relegation_alerts(annual, rest, all_pending, games, t) if annual and averages else {
-                        'available':False,'reason':'Faltan Tabla Anual o antecedentes de promedios.'}
+                    if annual and averages:
+                        try:
+                            answer = round_relegation_alerts(annual, rest, all_pending, averages, games, t)
+                        except Exception:
+                            # Un equipo no puede derribar toda la previa editorial.
+                            # No publicamos una certeza de descenso sin el solver:
+                            # registramos la excepción en los logs y bloqueamos
+                            # exclusivamente esta comprobación.
+                            import logging
+                            logging.getLogger(__name__).exception(
+                                'Falló la comprobación conjunta de descenso para %s (fecha %s)', t, round_no
+                            )
+                            answer = {'available':False, 'events':[],
+                                      'reason':'No se pudo certificar la cuenta conjunta de descenso; revisar los logs.'}
+                    else:
+                        answer = {'available':False, 'events':[],
+                                  'reason':'Faltan Tabla Anual o antecedentes de promedios.'}
                 else:
                     ctx = (ctxs.get(objective) if objective != 'Playoffs' else
                            _editorial_objective_context(zones, objective=objective,
