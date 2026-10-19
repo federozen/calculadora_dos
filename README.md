@@ -1,6 +1,47 @@
-# Calculadora LPF 2026 · Streamlit Cloud (3.8.87)
+# Calculadora LPF 2026 · Streamlit Cloud (3.8.89)
 
 Calculadora editorial de la Liga Profesional: playoffs por zonas, Tabla Anual, Libertadores, Sudamericana, descenso (Tabla General + promedios), escenarios, previas y textos listos para publicar.
+
+## Nuevo en 3.8.89: previa completa y condiciones de la fecha 14
+
+En **Redacción → Previa de la fecha**, el nuevo bloque «Qué puede definirse» aparece
+antes de las fichas individuales. Por defecto propone la fecha 14 cuando quedan
+hasta tres partidos de una fecha 13 casi terminada. Las definiciones se calculan
+con los últimos finales **realmente confirmados** y no suponen que los tres partidos
+faltantes terminaron de determinada manera.
+
+- **Playoffs:** muestra equipos que pueden asegurar el ingreso y equipos que pueden
+  quedar sin chances. Para cada vía identifica qué necesita el equipo (ganar,
+  empatar o perder) y las condiciones de los otros encuentros.
+- **Libertadores / al menos Sudamericana:** comprueba exclusivamente lo que se
+  puede definir por **Tabla Anual**, descontando plazas directas ya confirmadas.
+  No confunde quedar afuera de un cupo de Anual con perder la clasificación
+  por campeonatos pendientes.
+- **Descenso:** conecta Tabla Anual y promedios, incluida la reasignación. Sólo
+  publica definiciones certificadas; puede haber combinaciones no enumeradas.
+- **Matriz de los 30 clubes:** una fila por equipo con escenarios G/E/P para los
+  cuatro objetivos. En cada alerta se explica el porqué de la garantía usando
+  puntos, máximos matemáticos y rivales que todavía pueden alcanzarlo, o la
+  certificación conjunta de las dos vías de descenso.
+- **Todas las alternativas:** expandí cada equipo para consultar los otros
+  caminos suficientes comprobados. La pieza completa exportada también los
+  incorpora. No son porcentajes ni pronósticos.
+
+**Árbol y condiciones:** ahora también permite elegir expresamente la **fecha 14**
+como alcance del radar de un equipo, aun si hay hasta tres partidos de la 13
+pendientes. Los condicionales detallados y los cálculos a demanda de otras canchas
+respetan la misma fecha elegida.
+
+**Foto provisional:** si falta algún resultado anterior a la fecha elegida, se
+muestra una advertencia visible y el motor deja esos partidos libres en todas
+las ramas. Si la fecha 13 ya está cerrada en la base, recupera la foto exacta
+previa a la 14. Nunca inventa marcadores para completar una jornada.
+
+**Límite explícito:** las condiciones publicadas son suficientes (aseguran lo
+que indican), pero no necesariamente agotan todas las combinaciones que puede
+resolver el fixture completo. La matriz no transforma una rama abierta en una
+clasificación demostrada. La actualización de resultados sigue dependiendo de
+la automatización de GitHub y de que la fuente publique marcadores válidos.
 
 ## Corrección del 19/10/2026: Fecha 13
 
@@ -26,7 +67,7 @@ Esta aplicación ya está diseñada para **Streamlit Cloud + GitHub**. No hace f
 4. A partir de ahí, GitHub comprueba marcadores aproximadamente **cada 30 minutos** (el horario de GitHub puede retrasarse). **Si hay nuevos resultados finales verificados, guarda y publica automáticamente los cambios en `core/data/`.** Streamlit Cloud recoge ese commit. Sin nuevos finales, no modifica la base.
 5. **Dentro de Streamlit**, la app abre con la última base confirmada. Si esa foto tiene más de dos horas o el calendario muestra fechas ya cerradas incompletas, intenta consultar fuentes en vivo al usarla, y vuelve a revisarlas **cada diez minutos con la sesión abierta**. El botón «Actualizar a hoy» fuerza una nueva consulta en ese momento. La actualización en la sesión no reemplaza el almacenamiento persistente de GitHub.
 
-**Cómo comprobarlo:** en la barra lateral verás por separado «Base guardada en GitHub» y «Última consulta en vivo en esta sesión». Tras un nuevo resultado, el contador de partidos jugados y los pendientes deben cambiar. La versión de la app debe figurar como **3.8.87**.
+**Cómo comprobarlo:** en la barra lateral verás por separado «Base guardada en GitHub» y «Última consulta en vivo en esta sesión». Tras un nuevo resultado, el contador de partidos jugados y los pendientes deben cambiar. La versión de la app debe figurar como **3.8.89**.
 
 **Si la automatización falla:** la app conserva los 192 resultados verificados hasta el 18/10/2026 (con la fecha 13 todavía incompleta). No inventa partidos terminados. Un error de red o una fuente incompleta debe aparecer como advertencia y debe revisarse en los logs de GitHub Actions o Streamlit Cloud.
 

@@ -412,7 +412,7 @@ def _alert_paths(rows, matches):
         'round_state':'out'} for r in rows], matches)
 
 
-def round_objective_alerts(base, remaining, pending, games, team, cutoff, *, max_variable_matches=8):
+def round_objective_alerts(base, remaining, pending, games, team, cutoff, *, max_variable_matches=9):
     """Condiciones suficientes de definición por puntos y techos, no posición de hoy.
 
     Enumera sólo canchas cuyos resultados pueden cambiar los dos conteos. Las
@@ -448,20 +448,56 @@ def round_objective_alerts(base, remaining, pending, games, team, cutoff, *, max
         return {'available':False,'reason':f'Quedan {len(effective)} canchas variables: no terminó la enumeración de condiciones.', 'events':[]}
     ignored=[g for g in others if g not in effective]
     events=[]
+    branches=[]
+    from lpf_conditionals import _proof_metrics
     for result,label in [('G','gana'),('E','empata'),('P','pierde')]:
         rows=[]
         own_code=_own_code(own,team,result)
         for codes in product('LEV',repeat=len(effective)):
             points=_apply(base,[own,*effective,*ignored],(own_code,*codes,*(['E']*len(ignored))))
-            rows.append({'codes':codes,'state':_season_state(points,after,team,int(cutoff))})
-        for path in _alert_paths(rows,effective):
+            metrics=_proof_metrics(points,after,team,int(cutoff))
+            rows.append({'codes':codes,'state':_season_state(points,after,team,int(cutoff)),
+                         'points':metrics['team_points'],'ceiling':metrics['team_ceiling'],
+                         'threat_count':metrics['threat_count'],
+                         'unreachable_count':metrics['unreachable_count']})
+        paths=_alert_paths(rows,effective)
+        for path in paths:
             if path['season_state']=='pelea':continue
+            # El límite de rivales publicado es conservador para TODAS las
+            # combinaciones cubiertas por este camino, no sólo un caso testigo.
+            covered=[]
+            for row in rows:
+                if all(row['codes'][item['match_index']] in item['allowed']
+                       for item in path['conditions']):
+                    covered.append(row)
+            if not covered:
+                continue
             conditions=path['text'].replace(' Y ',' y ') if path['conditions'] else ''
-            events.append({'state':path['season_state'],'own_result':result,
+            state=path['season_state']
+            pts=covered[0]['points']
+            ceiling=covered[0]['ceiling']
+            if state=='in':
+                rivals=max(row['threat_count'] for row in covered)
+                proof=(f'Termina la fecha con {pts} puntos; incluso con los techos máximos restantes, '
+                       f'a lo sumo {rivals} rivales pueden igualarlo o superarlo '
+                       f'(el corte es de {int(cutoff)}).')
+            else:
+                rivals=min(row['unreachable_count'] for row in covered)
+                proof=(f'Su techo final queda en {ceiling} puntos; al menos {rivals} rivales '
+                       f'ya están por encima de ese máximo '
+                       f'(el corte es de {int(cutoff)}).')
+            events.append({'state':state,'own_result':result,
                 'condition':f'Si {label}' + (f' y {conditions}' if conditions else ''),
-                'conditions':path['conditions']})
-    return {'available':True,'events':events,'method':'points-and-ceilings',
-        'note':'Condiciones suficientes comprobadas con puntos y techos restantes. Abierto no significa que no pueda definirse mediante otras restricciones del fixture. No se calculan probabilidades.'}
+                'conditions':path['conditions'], 'proof':proof,
+                'team_points':pts, 'team_ceiling':ceiling,
+                'rivals_bound':rivals,'combinations':path['combinations']})
+        branches.append({'result':result,'label':label,'in':sum(row['state']=='in' for row in rows),
+                         'out':sum(row['state']=='out' for row in rows),
+                         'open':sum(row['state']=='pelea' for row in rows),
+                         'total':len(rows)})
+    return {'available':True,'events':events,'branches':branches,
+        'remaining_ignored':len(ignored),'method':'points-and-ceilings',
+        'note':'Condiciones suficientes comprobadas con puntos y techos restantes. Un estado abierto no certifica una clasificación posible por fixture exacto. No se calculan probabilidades.'}
 
 
 def round_relegation_alerts(annual,remaining,pending,averages,games,team):
@@ -494,12 +530,20 @@ def round_relegation_alerts(annual,remaining,pending,averages,games,team):
     rivals=sorted((t for t in annual if t!=team),key=lambda t:(Fraction(averages[t][0],averages[t][1]+remaining[t]),int(annual[t]['pts'])))
     other=next((tuple(g) for rival in rivals for g in games if rival in g and tuple(g)!=own and team not in g),None)
     effective=[other] if other else []
+    def explanation(state):
+        if state == 'in':
+            return ('Al cruzar Tabla Anual y promedios, ningún cierre restante puede hacerlo '
+                    'descender por ninguna de las dos vías, aun con desempates adversos.')
+        return ('Al cruzar Tabla Anual y promedios, no existe un cierre compatible de '
+                'permanencia ni con desempates favorables.')
+
     events=[];incomplete=current['state']=='unknown'
     for result,label in [('G','gana'),('E','empata'),('P','pierde')]:
         code='E' if result=='E' else ('L' if (result=='G')==(own[0]==team) else 'V')
         alone=relegation_state_with_results(annual,remaining,pending,averages,team,{own:code})
         if alone['state'] in ('in','out'):
-            events.append({'state':alone['state'],'own_result':result,'condition':f'Si {label}', 'conditions':[]})
+            events.append({'state':alone['state'],'own_result':result,'condition':f'Si {label}',
+                           'conditions':[], 'proof':explanation(alone['state'])})
             continue
         incomplete |= alone['state']=='unknown'
         rows=[]
@@ -511,7 +555,8 @@ def round_relegation_alerts(annual,remaining,pending,averages,games,team):
             if path['season_state']=='pelea':continue
             conditions=path['text'].replace(' Y ',' y ') if path['conditions'] else ''
             events.append({'state':path['season_state'],'own_result':result,
-                'condition':f'Si {label}'+(f' y {conditions}' if conditions else ''),'conditions':path['conditions']})
+                'condition':f'Si {label}'+(f' y {conditions}' if conditions else ''),
+                'conditions':path['conditions'], 'proof':explanation(path['season_state'])})
     return {'available':True,'events':events,'incomplete':incomplete,'other_match':other,
         'note':'Prueba conjunta de anual y promedios. Condiciones suficientes: las otras canchas y el resto del torneo quedan libres. Puede haber más alternativas con otras combinaciones. Descenso inevitable exige que no exista salvación ni con desempate favorable.'}
 

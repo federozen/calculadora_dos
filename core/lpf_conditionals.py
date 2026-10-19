@@ -244,7 +244,7 @@ def next_round_conditionals(
     team: str,
     cutoff: int = 8,
     *,
-    max_other_matches: int = 8,
+    max_other_matches: int = 9,
 ) -> dict[str, object]:
     """Enumera condicionales exactos de la próxima jornada.
 

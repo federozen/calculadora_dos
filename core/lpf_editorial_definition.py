@@ -55,7 +55,7 @@ def all_teams_matrix(
     teams: Sequence[str],
     cutoff: int,
     *,
-    max_other_matches: int = 8,
+    max_other_matches: int = 9,
 ) -> list[dict[str, object]]:
     """Una fila por equipo y tres columnas G/E/P con estado matemático exacto."""
     rows: list[dict[str, object]] = []
@@ -299,7 +299,7 @@ def definition_snapshot(
     key_team: str | None = None,
     fight_radius: int = 2,
     exact_window: int = 8,
-    max_other_matches: int = 8,
+    max_other_matches: int = 9,
 ) -> dict[str, object]:
     """Paquete JSON-safe de definición para otra interfaz o una futura API.
 
